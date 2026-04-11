@@ -4,10 +4,10 @@
   FastAPI Backend · Real-Time · Sub-200ms Latency
 ============================================================
 
-  Run:     python server.py
+  Run:     py server.py
   Open:    http://localhost:8000
 
-  Data:    Loads from parquet + CSV files
+  Data:    Loads from parquet files (all 4 datasets)
   Pricing: Demand-responsive + Scarcity + Competitor-aware
   Recs:    Session-based category affinity
   A/B:     Control vs Dynamic pricing groups
@@ -19,8 +19,9 @@ import sys
 import time
 import random
 import csv
+import json
 from contextlib import asynccontextmanager
-from collections import defaultdict
+from collections import defaultdict, Counter
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -37,25 +38,62 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARQUET_DIR = os.path.join(BASE_DIR, "Problem Statement 3 Sample Data")
 MAX_PRICE_INCREASE = 0.15   # 15% hard ceiling (fairness)
 MAX_PRICE_DECREASE = 0.10   # 10% max discount
-DEMAND_DIVISOR = 10         # clicks / 10 = demand factor
+DEMAND_THRESHOLD = 50       # ML rule: demand > 50 → +5%
+LOW_STOCK_THRESHOLD = 20    # ML rule: stock < 20 → +3%
 
 # ─────────────────────────────────────────────
-# Data Loading — In-Memory Store (fast!)
+# Data Stores — In-Memory (fast!)
 # ─────────────────────────────────────────────
 PRODUCTS = {}
 COMPETITOR_DATA = {}
 USER_SEGMENTS = {}
-CATEGORIES = defaultdict(list)   # category -> [sku_ids]
+CATEGORIES = defaultdict(list)       # category -> [sku_ids]
+CLICKSTREAM_STATS = {}               # Pre-computed clickstream analytics
+DEMAND_COUNTER = defaultdict(int)    # product:{sku_id} -> demand count
+ENGAGEMENT_SCORE = defaultdict(float)  # user:{user_id} -> engagement score
+EXPLORE_CACHE = {}                   # Cached exploration results
 
+
+# ─────────────────────────────────────────────
+# 📊 Data Loading — All 4 Datasets
+# ─────────────────────────────────────────────
 def load_data():
-    """Load real data from parquet files + CSV into memory."""
-    global PRODUCTS, COMPETITOR_DATA, USER_SEGMENTS, CATEGORIES
+    """Load all 4 datasets from parquet files into memory."""
+    global PRODUCTS, COMPETITOR_DATA, USER_SEGMENTS, CATEGORIES, CLICKSTREAM_STATS, DEMAND_COUNTER, ENGAGEMENT_SCORE
 
-    # --- 1. Load Product Catalog from parquet ---
+    print("\n  ╔══════════════════════════════════════════╗")
+    print("  ║   📊 Loading All 4 Datasets...          ║")
+    print("  ╚══════════════════════════════════════════╝\n")
+
+    # --- 1. Load Product Catalog (5,368 products) ---
+    _load_product_catalog()
+
+    # --- 2. Load User Segment Profiles (500K users) ---
+    _load_user_segments()
+
+    # --- 3. Load Competitor Pricing Feed (1.69M rows) ---
+    _load_competitor_pricing()
+
+    # --- 4. Load Clickstream Events (10.2M rows — sampled) ---
+    _load_clickstream_events()
+
+    # --- 5. Pre-compute exploration stats ---
+    _compute_explore_cache()
+
+    print(f"\n  ✅ All datasets loaded successfully!")
+    print(f"  📦 Products: {len(PRODUCTS)}")
+    print(f"  👤 Users:    {len(USER_SEGMENTS)}")
+    print(f"  🏪 Competitor records: {len(COMPETITOR_DATA)}")
+    print(f"  📊 Clickstream stats ready\n")
+
+
+def _load_product_catalog():
+    """Dataset 1: Product catalog (product_id, category, price, stock)."""
+    global PRODUCTS, CATEGORIES
     try:
         import pandas as pd
         catalog = pd.read_parquet(os.path.join(PARQUET_DIR, "product_catalog.parquet"))
-        for _, row in catalog.head(50).iterrows():  # Top 50 products for demo speed
+        for _, row in catalog.iterrows():
             sku = row["sku_id"]
             PRODUCTS[sku] = {
                 "sku_id": sku,
@@ -72,6 +110,8 @@ def load_data():
                 "rating": round(float(row["avg_rating"]), 1),
                 "review_count": int(row["review_count"]),
                 "tags": row.get("tags", "[]"),
+                "is_active": bool(row.get("is_active", True)),
+                "weight_kg": round(float(row.get("weight_kg", 0)), 2),
                 # Live tracking fields
                 "views": 0,
                 "clicks": 0,
@@ -80,84 +120,254 @@ def load_data():
                 "price_history": [round(float(row["current_price_usd"]), 2)],
             }
             CATEGORIES[row["category"]].append(sku)
-        print(f"  [OK] Loaded {len(PRODUCTS)} products from parquet")
+        print(f"  [OK] Dataset 1 — Product Catalog: {len(PRODUCTS)} products loaded")
+        print(f"       Categories: {len(CATEGORIES)} unique")
     except Exception as e:
-        print(f"  [WARN] Parquet load failed ({e}), falling back to CSV...")
-        _load_from_csv()
+        print(f"  [WARN] Product catalog load failed: {e}")
+        _load_demo_products()
 
-    # --- 2. Load Competitor Pricing (sample) ---
-    try:
-        import pandas as pd
-        comp = pd.read_parquet(os.path.join(PARQUET_DIR, "competitor_pricing_feed.parquet"))
-        # Keep latest competitor price per SKU (just top products)
-        for sku in list(PRODUCTS.keys()):
-            sku_data = comp[comp["sku_id"] == sku]
-            if len(sku_data) > 0:
-                latest = sku_data.iloc[-1]
-                COMPETITOR_DATA[sku] = {
-                    "competitor": latest["competitor"],
-                    "competitor_price": round(float(latest["competitor_price"]), 2),
-                    "is_on_promotion": bool(latest["is_on_promotion"]),
-                }
-        print(f"  [OK] Loaded competitor data for {len(COMPETITOR_DATA)} products")
-    except Exception as e:
-        print(f"  [WARN] Competitor data load skipped: {e}")
 
-    # --- 3. Load User Segments (sample) ---
+def _load_user_segments():
+    """Dataset 2: User segment profiles (500K users)."""
+    global USER_SEGMENTS, ENGAGEMENT_SCORE
     try:
         import pandas as pd
         users = pd.read_parquet(os.path.join(PARQUET_DIR, "user_segment_profiles.parquet"))
-        for _, row in users.head(200).iterrows():
+        for _, row in users.iterrows():
             uid = row["user_id"]
             USER_SEGMENTS[uid] = {
                 "segment": row["segment"],
+                "country": row.get("country", ""),
+                "device_type": row.get("device_type", "desktop"),
+                "os": row.get("os", ""),
                 "willingness_to_pay": round(float(row["willingness_to_pay_multiplier"]), 3),
                 "preferred_categories": row.get("preferred_categories", "[]"),
-                "device": row.get("device_type", "desktop"),
+                "lifetime_value": round(float(row.get("lifetime_value_usd", 0)), 2),
+                "avg_order_value": round(float(row.get("avg_order_value_usd", 0)), 2),
+                "sessions_per_month": int(row.get("sessions_per_month", 0)),
+                "purchase_frequency": round(float(row.get("purchase_frequency", 0)), 3),
+                "cart_abandonment_rate": round(float(row.get("cart_abandonment_rate", 0)), 3),
+                "age_group": row.get("age_group", ""),
+                "gender": row.get("gender", ""),
             }
-        print(f"  [OK] Loaded {len(USER_SEGMENTS)} user profiles")
+            # Initialize engagement score from profile data
+            ENGAGEMENT_SCORE[uid] = round(
+                float(row.get("sessions_per_month", 0)) * 2 +
+                float(row.get("purchase_frequency", 0)) * 50 +
+                (1 - float(row.get("cart_abandonment_rate", 0.5))) * 20,
+                2
+            )
+        print(f"  [OK] Dataset 2 — User Segments: {len(USER_SEGMENTS)} users loaded")
+        segments = Counter(u["segment"] for u in USER_SEGMENTS.values())
+        print(f"       Segments: {dict(segments)}")
     except Exception as e:
-        print(f"  [WARN] User segments load skipped: {e}")
+        print(f"  [WARN] User segments load failed: {e}")
 
 
-def _load_from_csv():
-    """Fallback: load from products.csv on Desktop."""
-    csv_path = os.path.join(BASE_DIR, "products.csv")
-    if not os.path.exists(csv_path):
-        print("  [WARN] No data files found, using demo products")
-        _load_demo_products()
-        return
+def _load_competitor_pricing():
+    """Dataset 3: Competitor pricing feed (1.69M rows)."""
+    global COMPETITOR_DATA
+    try:
+        import pandas as pd
+        comp = pd.read_parquet(os.path.join(PARQUET_DIR, "competitor_pricing_feed.parquet"))
+        # Keep LATEST competitor price per SKU (most recent date)
+        comp_sorted = comp.sort_values("date", ascending=False)
+        seen_skus = set()
+        for _, row in comp_sorted.iterrows():
+            sku = row["sku_id"]
+            if sku in seen_skus:
+                continue
+            if sku in PRODUCTS:
+                COMPETITOR_DATA[sku] = {
+                    "competitor": row["competitor"],
+                    "competitor_price": round(float(row["competitor_price"]), 2),
+                    "our_base_price": round(float(row.get("our_base_price", 0)), 2),
+                    "price_delta_pct": round(float(row.get("price_delta_pct", 0)), 2),
+                    "is_on_promotion": bool(row["is_on_promotion"]),
+                    "promo_discount_pct": round(float(row.get("promo_discount_pct", 0)), 1),
+                    "in_stock": bool(row.get("in_stock", True)),
+                    "date": str(row.get("date", "")),
+                }
+                seen_skus.add(sku)
+        print(f"  [OK] Dataset 3 — Competitor Pricing: {len(COMPETITOR_DATA)} SKUs with competitor data")
+    except Exception as e:
+        print(f"  [WARN] Competitor data load failed: {e}")
 
-    with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader):
-            if i >= 50:
-                break
-            sku = row["product_id"]
-            base = float(row["price"])
-            PRODUCTS[sku] = {
+
+def _load_clickstream_events():
+    """
+    Dataset 4: Clickstream events (10.2M rows — sampled for memory).
+    Columns: user_id, product_id (sku_id), event_type, timestamp, session_id
+    + category, device_type, ab_group, price_seen_usd, etc.
+    """
+    global CLICKSTREAM_STATS, DEMAND_COUNTER, ENGAGEMENT_SCORE
+    try:
+        import pandas as pd
+        # Sample to avoid memory issues on large datasets (424MB parquet)
+        print("  [..] Loading clickstream data (sampling 500K of 10.2M rows)...")
+        clicks = pd.read_parquet(os.path.join(PARQUET_DIR, "clickstream_events.parquet"),
+                                 columns=["user_id", "sku_id", "event_type", "session_id",
+                                           "category", "device_type", "ab_group",
+                                           "price_seen_usd", "hour_of_day", "day_of_week"])
+        # Sample for speed (500K rows from 10.2M)
+        if len(clicks) > 500_000:
+            clicks_sample = clicks.sample(n=500_000, random_state=42)
+        else:
+            clicks_sample = clicks
+
+        # ── Compute statistics ──
+        total_events = len(clicks)
+        total_users = clicks["user_id"].nunique()
+        total_sessions = clicks["session_id"].nunique()
+
+        # Event type distribution (from full dataset column)
+        event_dist = clicks_sample["event_type"].value_counts().to_dict()
+
+        # Top 10 most viewed products (from sample, scaled)
+        view_events = clicks_sample[clicks_sample["event_type"].isin(["page_view", "product_view"])]
+        top_viewed = view_events["sku_id"].value_counts().head(10)
+        top_viewed_products = []
+        for sku, count in top_viewed.items():
+            product_name = PRODUCTS[sku]["name"] if sku in PRODUCTS else sku
+            category = PRODUCTS[sku]["category"] if sku in PRODUCTS else "Unknown"
+            top_viewed_products.append({
                 "sku_id": sku,
-                "name": row["product_name"],
-                "category": row["category"],
-                "subcategory": row.get("subcategory", ""),
-                "brand": row.get("brand", ""),
-                "base_price": round(base, 2),
-                "cost_price": round(float(row.get("cost_price", base * 0.5)), 2),
-                "current_price": round(base, 2),
-                "min_price": round(base * 0.70, 2),
-                "max_price": round(base * 1.30, 2),
-                "inventory": int(row.get("inventory", 100)),
-                "rating": round(float(row.get("rating", 3.5)), 1),
-                "review_count": int(row.get("review_count", 100)),
-                "tags": "[]",
-                "views": 0,
-                "clicks": 0,
-                "add_to_carts": 0,
-                "purchases": 0,
-                "price_history": [round(base, 2)],
-            }
-            CATEGORIES[row["category"]].append(sku)
-    print(f"  [OK] Loaded {len(PRODUCTS)} products from CSV")
+                "name": product_name,
+                "category": category,
+                "view_count": int(count),
+            })
+
+        # Category distribution
+        cat_dist = clicks_sample["category"].value_counts().to_dict()
+
+        # Device distribution
+        device_dist = clicks_sample["device_type"].value_counts().to_dict()
+
+        # AB group distribution
+        ab_dist = clicks_sample["ab_group"].value_counts().to_dict()
+
+        # Hourly distribution
+        hourly_dist = clicks_sample["hour_of_day"].value_counts().sort_index().to_dict()
+        # Convert numpy int keys to python int
+        hourly_dist = {int(k): int(v) for k, v in hourly_dist.items()}
+
+        # Day-of-week distribution
+        dow_dist = clicks_sample["day_of_week"].value_counts().sort_index().to_dict()
+        dow_dist = {int(k): int(v) for k, v in dow_dist.items()}
+
+        # ── Build demand counters from clickstream ──
+        demand_events = clicks_sample[clicks_sample["event_type"].isin(
+            ["product_view", "add_to_cart", "purchase", "add_to_wishlist"]
+        )]
+        demand_counts = demand_events["sku_id"].value_counts()
+        for sku, count in demand_counts.items():
+            # Scale back up to approximate full dataset demand
+            DEMAND_COUNTER[sku] = int(count * (total_events / len(clicks_sample)))
+
+        # ── Build engagement scores from clickstream ──
+        user_event_counts = clicks_sample.groupby("user_id")["event_type"].count()
+        for uid, count in user_event_counts.items():
+            existing = ENGAGEMENT_SCORE.get(uid, 0)
+            ENGAGEMENT_SCORE[uid] = round(existing + count * 0.5, 2)
+
+        # ── Update product view/click counts from clickstream ──
+        for sku, count in clicks_sample[clicks_sample["event_type"].isin(["page_view", "product_view"])]["sku_id"].value_counts().items():
+            if sku in PRODUCTS:
+                PRODUCTS[sku]["views"] = int(count)
+        for sku, count in clicks_sample[clicks_sample["event_type"] == "add_to_cart"]["sku_id"].value_counts().items():
+            if sku in PRODUCTS:
+                PRODUCTS[sku]["add_to_carts"] = int(count)
+        for sku, count in clicks_sample[clicks_sample["event_type"] == "purchase"]["sku_id"].value_counts().items():
+            if sku in PRODUCTS:
+                PRODUCTS[sku]["purchases"] = int(count)
+
+        CLICKSTREAM_STATS = {
+            "total_events": int(total_events),
+            "sampled_events": int(len(clicks_sample)),
+            "total_users": int(total_users),
+            "total_sessions": int(total_sessions),
+            "event_type_distribution": {str(k): int(v) for k, v in event_dist.items()},
+            "top_10_most_viewed": top_viewed_products,
+            "category_distribution": {str(k): int(v) for k, v in cat_dist.items()},
+            "device_distribution": {str(k): int(v) for k, v in device_dist.items()},
+            "ab_group_distribution": {str(k): int(v) for k, v in ab_dist.items()},
+            "hourly_distribution": hourly_dist,
+            "day_of_week_distribution": dow_dist,
+        }
+
+        print(f"  [OK] Dataset 4 — Clickstream: {total_events:,} total events ({len(clicks_sample):,} sampled)")
+        print(f"       Users: {total_users:,} | Sessions: {total_sessions:,}")
+        print(f"       Event types: {list(event_dist.keys())}")
+        print(f"       Demand counters: {len(DEMAND_COUNTER)} products tracked")
+
+    except Exception as e:
+        print(f"  [WARN] Clickstream load failed: {e}")
+        import traceback
+        traceback.print_exc()
+        CLICKSTREAM_STATS = {"error": str(e), "total_events": 0}
+
+
+def _compute_explore_cache():
+    """Pre-compute exploration summary for /explore endpoint."""
+    global EXPLORE_CACHE
+
+    # Category breakdown from product catalog
+    category_stats = {}
+    for cat, skus in CATEGORIES.items():
+        prices = [PRODUCTS[s]["base_price"] for s in skus if s in PRODUCTS]
+        stocks = [PRODUCTS[s]["inventory"] for s in skus if s in PRODUCTS]
+        category_stats[cat] = {
+            "product_count": len(skus),
+            "avg_price": round(sum(prices) / max(1, len(prices)), 2),
+            "min_price": round(min(prices) if prices else 0, 2),
+            "max_price": round(max(prices) if prices else 0, 2),
+            "total_stock": sum(stocks),
+            "avg_stock": round(sum(stocks) / max(1, len(stocks)), 0),
+        }
+
+    # User segment breakdown
+    segment_counts = Counter(u["segment"] for u in USER_SEGMENTS.values())
+    country_counts = Counter(u["country"] for u in USER_SEGMENTS.values())
+    device_counts = Counter(u["device_type"] for u in USER_SEGMENTS.values())
+    age_counts = Counter(u["age_group"] for u in USER_SEGMENTS.values())
+
+    # Top user segments by lifetime value
+    segment_ltv = defaultdict(list)
+    for u in USER_SEGMENTS.values():
+        segment_ltv[u["segment"]].append(u["lifetime_value"])
+    segment_avg_ltv = {
+        seg: round(sum(vals) / max(1, len(vals)), 2)
+        for seg, vals in segment_ltv.items()
+    }
+
+    EXPLORE_CACHE = {
+        "summary": {
+            "total_products": len(PRODUCTS),
+            "total_users": len(USER_SEGMENTS),
+            "total_categories": len(CATEGORIES),
+            "unique_categories": sorted(CATEGORIES.keys()),
+            "total_brands": len(set(p["brand"] for p in PRODUCTS.values())),
+            "total_competitor_records": len(COMPETITOR_DATA),
+            "clickstream_events": CLICKSTREAM_STATS.get("total_events", 0),
+        },
+        "category_distribution": category_stats,
+        "user_segments": {
+            "segment_counts": dict(segment_counts),
+            "country_top_10": dict(country_counts.most_common(10)),
+            "device_distribution": dict(device_counts),
+            "age_distribution": dict(age_counts),
+            "segment_avg_ltv": segment_avg_ltv,
+        },
+        "clickstream": CLICKSTREAM_STATS,
+        "pricing": {
+            "avg_base_price": round(sum(p["base_price"] for p in PRODUCTS.values()) / max(1, len(PRODUCTS)), 2),
+            "avg_current_price": round(sum(p["current_price"] for p in PRODUCTS.values()) / max(1, len(PRODUCTS)), 2),
+            "products_with_competitor_data": len(COMPETITOR_DATA),
+            "products_low_stock": sum(1 for p in PRODUCTS.values() if p["inventory"] < LOW_STOCK_THRESHOLD),
+            "products_high_demand": sum(1 for sku in PRODUCTS if DEMAND_COUNTER.get(sku, 0) > DEMAND_THRESHOLD),
+        },
+    }
+    print(f"  [OK] Exploration cache computed")
 
 
 def _load_demo_products():
@@ -179,6 +389,7 @@ def _load_demo_products():
             "current_price": price, "min_price": round(price * 0.70, 2),
             "max_price": round(price * 1.30, 2), "inventory": 100,
             "rating": 4.0, "review_count": 500, "tags": "[]",
+            "is_active": True, "weight_kg": 1.0,
             "views": 0, "clicks": 0, "add_to_carts": 0, "purchases": 0,
             "price_history": [price],
         }
@@ -209,41 +420,98 @@ ANALYTICS = {
 
 
 # ─────────────────────────────────────────────
-# 💰 Dynamic Pricing Engine
+# 🧠 Feature Logic — Engagement & Demand
+# ─────────────────────────────────────────────
+def get_engagement_score(user_id: str) -> float:
+    """
+    Engagement score for a user.
+    Combines: profile data (sessions, purchase freq, abandonment)
+    + real-time event counts.
+    """
+    return ENGAGEMENT_SCORE.get(user_id, 0.0)
+
+
+def get_demand_count(sku_id: str) -> int:
+    """
+    Demand counter for a product.
+    Aggregated from clickstream (views + carts + purchases + wishlists)
+    + real-time increments from /event calls.
+    """
+    return DEMAND_COUNTER.get(sku_id, 0)
+
+
+def update_engagement(user_id: str, event_type: str):
+    """Update user engagement score based on event type."""
+    weights = {
+        "view": 1,
+        "click": 2,
+        "add_to_cart": 5,
+        "purchase": 10,
+        "page_view": 1,
+        "product_view": 2,
+        "add_to_wishlist": 3,
+        "checkout_start": 7,
+        "search": 1,
+    }
+    ENGAGEMENT_SCORE[user_id] = round(
+        ENGAGEMENT_SCORE.get(user_id, 0) + weights.get(event_type, 1),
+        2
+    )
+
+
+def update_demand(sku_id: str, event_type: str):
+    """Update product demand counter based on event type."""
+    weights = {
+        "view": 1,
+        "click": 2,
+        "add_to_cart": 5,
+        "purchase": 10,
+        "product_view": 2,
+        "add_to_wishlist": 3,
+    }
+    DEMAND_COUNTER[sku_id] = DEMAND_COUNTER.get(sku_id, 0) + weights.get(event_type, 1)
+
+
+# ─────────────────────────────────────────────
+# 💰 Dynamic Pricing Engine (ML Rules)
 # ─────────────────────────────────────────────
 def compute_dynamic_price(product: dict) -> tuple:
     """
-    Compute dynamic price with full rationale.
-    
-    Formula: P = base_price × (1 + min(0.15, clicks/10))
-    Adjustments: scarcity, competitor, demand velocity
-    
+    ML-based dynamic pricing engine.
+
+    Rules:
+        price = base_price
+        if demand > 50:  price += 5%
+        if stock < 20:   price += 3%
+        + competitor awareness
+        + fairness guardrails
+
     Returns: (new_price, rationale_list)
     """
     base = product["base_price"]
-    clicks = product["clicks"]
-    inventory = product["inventory"]
     sku = product["sku_id"]
+    inventory = product["inventory"]
     rationale = []
 
-    # ─── 1. Demand-Responsive Component ───
-    # P = base × (1 + min(0.15, clicks/10))
-    demand_factor = min(MAX_PRICE_INCREASE, clicks / DEMAND_DIVISOR)
-    demand_multiplier = 1 + demand_factor
-    if demand_factor > 0.01:
-        rationale.append(f"📈 High demand: +{demand_factor*100:.1f}% ({clicks} clicks)")
-    
-    price = base * demand_multiplier
+    # Start with base price
+    price = base
 
-    # ─── 2. Scarcity Adjustment ───
-    if inventory < 20:
-        scarcity_boost = min(0.05, (20 - inventory) / 200)  # up to +5%
+    # ─── 1. ML Rule: Demand-based pricing ───
+    demand = get_demand_count(sku)
+    if demand > DEMAND_THRESHOLD:
+        demand_boost = 0.05  # +5%
+        price *= (1 + demand_boost)
+        rationale.append(f"📈 High demand ({demand} signals > {DEMAND_THRESHOLD}): +5%")
+
+    # ─── 2. ML Rule: Scarcity-based pricing ───
+    if inventory < LOW_STOCK_THRESHOLD:
+        scarcity_boost = 0.03  # +3%
         price *= (1 + scarcity_boost)
-        rationale.append(f"🔥 Low stock ({inventory} left): +{scarcity_boost*100:.1f}%")
+        rationale.append(f"🔥 Low stock ({inventory} left < {LOW_STOCK_THRESHOLD}): +3%")
     elif inventory > 400:
-        surplus_discount = min(0.05, (inventory - 400) / 2000)  # up to -5%
+        surplus_discount = min(0.05, (inventory - 400) / 2000)
         price *= (1 - surplus_discount)
-        rationale.append(f"📦 High stock: -{surplus_discount*100:.1f}% to move inventory")
+        rationale.append(f"📦 High stock ({inventory}): -{surplus_discount*100:.1f}% to move inventory")
 
     # ─── 3. Competitor Price Check ───
     if sku in COMPETITOR_DATA:
@@ -254,13 +522,12 @@ def compute_dynamic_price(product: dict) -> tuple:
             price *= (1 - adjustment)
             rationale.append(f"🏪 Competitor match ({comp['competitor']}): -{adjustment*100:.1f}%")
         elif comp["is_on_promotion"]:
-            rationale.append(f"⚡ Competitor {comp['competitor']} running promotion")
+            rationale.append(f"⚡ Competitor {comp['competitor']} running promotion ({comp.get('promo_discount_pct', 0)}% off)")
 
     # ─── 4. Enforce Fairness Guardrails ───
-    # Hard ceiling: never more than +15% above base
     ceiling = base * (1 + MAX_PRICE_INCREASE)
     floor = max(product["cost_price"] * 1.05, base * (1 - MAX_PRICE_DECREASE))
-    
+
     if price > ceiling:
         price = ceiling
         rationale.append(f"🛡️ Price ceiling applied (max +{MAX_PRICE_INCREASE*100:.0f}%)")
@@ -270,9 +537,9 @@ def compute_dynamic_price(product: dict) -> tuple:
 
     # Clamp to min/max from catalog
     price = max(product["min_price"], min(price, product["max_price"]))
-    
+
     price = round(price, 2)
-    
+
     if not rationale:
         rationale.append("📊 Base price — no demand signals yet")
 
@@ -341,8 +608,8 @@ async def lifespan(app):
 
 app = FastAPI(
     title="APEX Dynamic Pricing Engine",
-    description="Real-time dynamic pricing, recommendations & A/B testing",
-    version="2.0.0",
+    description="Real-time dynamic pricing, recommendations & A/B testing — powered by 4 real datasets",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -363,11 +630,74 @@ def serve_index():
     return {"message": "APEX API running. Place index.html in same folder."}
 
 
+# ── 📊 GET /explore — Data Exploration Dashboard ──
+@app.get("/explore")
+def explore_data():
+    """
+    📊 Data Exploration endpoint.
+    Returns comprehensive stats from all 4 datasets:
+    - Total users, products, unique categories
+    - Event type distribution
+    - Top 10 most viewed products
+    - Category distribution
+    - User segment breakdown
+    - Demand & engagement metrics
+    """
+    return {
+        **EXPLORE_CACHE,
+        "demand_stats": {
+            "total_products_tracked": len(DEMAND_COUNTER),
+            "high_demand_products": sum(1 for v in DEMAND_COUNTER.values() if v > DEMAND_THRESHOLD),
+            "avg_demand": round(sum(DEMAND_COUNTER.values()) / max(1, len(DEMAND_COUNTER)), 1),
+            "top_demand_products": sorted(
+                [
+                    {"sku_id": sku, "demand": count,
+                     "name": PRODUCTS[sku]["name"] if sku in PRODUCTS else sku}
+                    for sku, count in DEMAND_COUNTER.items()
+                ],
+                key=lambda x: x["demand"], reverse=True
+            )[:10],
+        },
+        "engagement_stats": {
+            "total_users_tracked": len(ENGAGEMENT_SCORE),
+            "avg_engagement": round(sum(ENGAGEMENT_SCORE.values()) / max(1, len(ENGAGEMENT_SCORE)), 2),
+            "top_engaged_users": sorted(
+                [
+                    {"user_id": uid, "engagement_score": score}
+                    for uid, score in ENGAGEMENT_SCORE.items()
+                ],
+                key=lambda x: x["engagement_score"], reverse=True
+            )[:10],
+        },
+    }
+
+
 # ── GET /products ──
 @app.get("/products")
-def list_products(limit: int = Query(20, description="Max products to return")):
-    """Return all products with current dynamic prices."""
-    products = list(PRODUCTS.values())[:limit]
+def list_products(
+    limit: int = Query(20, description="Max products to return"),
+    category: str = Query(None, description="Filter by category"),
+    sort_by: str = Query("views", description="Sort: views, price, demand, rating"),
+):
+    """Return products with current dynamic prices, filterable and sortable."""
+    products = list(PRODUCTS.values())
+
+    # Filter by category
+    if category:
+        products = [p for p in products if p["category"].lower() == category.lower()]
+
+    # Sort
+    if sort_by == "price":
+        products.sort(key=lambda x: x["current_price"], reverse=True)
+    elif sort_by == "demand":
+        products.sort(key=lambda x: DEMAND_COUNTER.get(x["sku_id"], 0), reverse=True)
+    elif sort_by == "rating":
+        products.sort(key=lambda x: x["rating"], reverse=True)
+    else:  # views (default)
+        products.sort(key=lambda x: x["views"], reverse=True)
+
+    products = products[:limit]
+
     return {
         "products": [
             {
@@ -383,10 +713,12 @@ def list_products(limit: int = Query(20, description="Max products to return")):
                 "review_count": p["review_count"],
                 "views": p["views"],
                 "clicks": p["clicks"],
+                "demand": DEMAND_COUNTER.get(p["sku_id"], 0),
             }
             for p in products
         ],
         "total": len(PRODUCTS),
+        "categories": sorted(CATEGORIES.keys()),
     }
 
 
@@ -400,7 +732,7 @@ def record_event(
 ):
     """
     Record a user event and trigger price recalculation.
-    This is the core endpoint for the real-time pipeline.
+    Updates engagement scores + demand counters + pricing.
     """
     start = time.time()
 
@@ -411,7 +743,7 @@ def record_event(
     session = SESSION_STORE[session_id]
     old_price = product["current_price"]
 
-    # ─ Track event ─
+    # ─ Track event on product ─
     product["views"] += 1
     if event_type == "click":
         product["clicks"] += 1
@@ -423,6 +755,10 @@ def record_event(
         product["clicks"] += 2  # purchase = strongest signal
         product["inventory"] = max(0, product["inventory"] - 1)
 
+    # ─ 🧠 Update Feature Logic ─
+    update_engagement(user_id, event_type)
+    update_demand(sku_id, event_type)
+
     # ─ Update session ─
     session["clicks"].append(sku_id)
     session["categories"].append(product["category"])
@@ -432,7 +768,7 @@ def record_event(
     if session["ab_group"] is None:
         session["ab_group"] = "B" if hash(session_id) % 2 == 0 else "A"
 
-    # ─ Compute new price ─
+    # ─ 💰 Compute new price with ML rules ─
     new_price, rationale = compute_dynamic_price(product)
 
     ab_group = session["ab_group"]
@@ -449,6 +785,9 @@ def record_event(
         display_price = new_price
         product["current_price"] = new_price
         product["price_history"].append(new_price)
+        # Keep price history manageable
+        if len(product["price_history"]) > 50:
+            product["price_history"] = product["price_history"][-50:]
         ANALYTICS["group_b_sessions"] += 1
         if event_type == "purchase":
             ANALYTICS["group_b_conversions"] += 1
@@ -472,6 +811,9 @@ def record_event(
         "latency_ms": latency_ms,
         "timestamp": time.time(),
     })
+    # Keep event log manageable
+    if len(EVENT_LOG) > 1000:
+        EVENT_LOG[:] = EVENT_LOG[-500:]
 
     return {
         "status": "ok",
@@ -487,6 +829,8 @@ def record_event(
         "ab_group": ab_group,
         "inventory": product["inventory"],
         "demand_clicks": product["clicks"],
+        "demand_count": get_demand_count(sku_id),
+        "engagement_score": get_engagement_score(user_id),
         "recommendations": recs,
         "latency_ms": latency_ms,
     }
@@ -495,7 +839,7 @@ def record_event(
 # ── GET /price ──
 @app.get("/price")
 def get_price(product_id: str = Query(..., description="Product SKU ID")):
-    """Get current dynamic price for a product (backward compat)."""
+    """Get current dynamic price for a product."""
     # Support both "SKU001000" and simple numeric IDs
     sku = product_id if product_id in PRODUCTS else None
     if not sku:
@@ -514,6 +858,7 @@ def get_price(product_id: str = Query(..., description="Product SKU ID")):
     product = PRODUCTS[sku]
     product["views"] += 1
     product["clicks"] += 1
+    update_demand(sku, "click")
 
     new_price, rationale = compute_dynamic_price(product)
     old_price = product["current_price"]
@@ -525,11 +870,12 @@ def get_price(product_id: str = Query(..., description="Product SKU ID")):
         "price": new_price,
         "old_price": old_price,
         "base_price": product["base_price"],
-        "direction": "up" if new_price > old_price else "down",
+        "direction": "up" if new_price > old_price else ("down" if new_price < old_price else "same"),
         "rationale": rationale,
         "inventory": product["inventory"],
         "views": product["views"],
         "clicks": product["clicks"],
+        "demand": get_demand_count(sku),
     }
 
 
@@ -545,6 +891,7 @@ def get_recs(
     return {
         "user_id": user_id,
         "session_id": session_id,
+        "engagement_score": get_engagement_score(user_id),
         "recommendations": recs,
     }
 
@@ -589,10 +936,32 @@ def analytics():
             "summary": f"Dynamic pricing {'increased' if lift > 0 else 'decreased'} conversion by {abs(lift):.1f}%",
         },
         "top_products": [
-            {"name": p["name"], "views": p["views"], "clicks": p["clicks"], "price": p["current_price"]}
+            {"name": p["name"], "views": p["views"], "clicks": p["clicks"],
+             "price": p["current_price"], "demand": DEMAND_COUNTER.get(p["sku_id"], 0)}
             for p in top_products
         ],
         "recent_events": recent_events,
+        "feature_summary": {
+            "demand_counter_products": len(DEMAND_COUNTER),
+            "engagement_tracked_users": len(ENGAGEMENT_SCORE),
+            "high_demand_products": sum(1 for v in DEMAND_COUNTER.values() if v > DEMAND_THRESHOLD),
+            "low_stock_products": sum(1 for p in PRODUCTS.values() if p["inventory"] < LOW_STOCK_THRESHOLD),
+        },
+    }
+
+
+# ── GET /user/{user_id} — User Profile ──
+@app.get("/user/{user_id}")
+def get_user(user_id: str):
+    """Get user segment profile and engagement score."""
+    if user_id not in USER_SEGMENTS:
+        return {"error": f"User {user_id} not found"}
+
+    profile = USER_SEGMENTS[user_id]
+    return {
+        "user_id": user_id,
+        "profile": profile,
+        "engagement_score": get_engagement_score(user_id),
     }
 
 
@@ -601,9 +970,13 @@ def analytics():
 def health():
     return {
         "status": "healthy",
+        "version": "3.0.0",
         "products_loaded": len(PRODUCTS),
         "competitors_loaded": len(COMPETITOR_DATA),
         "user_segments_loaded": len(USER_SEGMENTS),
+        "clickstream_events": CLICKSTREAM_STATS.get("total_events", 0),
+        "demand_counter_size": len(DEMAND_COUNTER),
+        "engagement_score_size": len(ENGAGEMENT_SCORE),
         "uptime_seconds": round(time.time() - _start_time, 1),
     }
 
@@ -617,13 +990,13 @@ _start_time = time.time()
 if __name__ == "__main__":
     print()
     print("=" * 55)
-    print("  APEX -- Dynamic Pricing Engine v2.0")
+    print("  APEX -- Dynamic Pricing Engine v3.0")
+    print("  All 4 Datasets · ML Pricing · Feature Logic")
     print("=" * 55)
     print(f"  Data dir : {PARQUET_DIR}")
     print(f"  API      : http://localhost:8000")
+    print(f"  Explore  : http://localhost:8000/explore")
     print(f"  Frontend : http://localhost:8000")
     print("=" * 55)
     print()
-    port = int(os.environ.get("PORT", 8000))
-uvicorn.run(app, host="0.0.0.0", port=port)
-
+    uvicorn.run(app, host="0.0.0.0", port=8000)
