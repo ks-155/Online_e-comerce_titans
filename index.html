@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>APEX — Dynamic Pricing Engine</title>
-  <meta name="description" content="Real-time dynamic pricing, personalized recommendations, and A/B testing engine" />
+  <title>Smart Shop — Dynamic Pricing Engine</title>
+  <meta name="description" content="Real-time dynamic pricing and recommendation engine demo" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -54,9 +54,9 @@
     }
 
     .product-card:hover {
-      transform: translateY(-4px);
+      transform: translateY(-5px);
       border-color: rgba(226, 185, 111, 0.4) !important;
-      box-shadow: 0 16px 48px rgba(226, 185, 111, 0.08);
+      box-shadow: 0 16px 48px rgba(226, 185, 111, 0.1);
     }
 
     .sim-btn {
@@ -188,22 +188,6 @@
       animation: priceDown 0.5s ease-out;
     }
 
-    @keyframes fadeIn {
-      0% {
-        opacity: 0;
-        transform: translateY(8px);
-      }
-
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .fade-in {
-      animation: fadeIn 0.3s ease-out;
-    }
-
     ::-webkit-scrollbar {
       width: 4px;
     }
@@ -216,20 +200,6 @@
       background: rgba(226, 185, 111, 0.2);
       border-radius: 4px;
     }
-
-    .tab-active {
-      border-bottom: 2px solid #e2b96f;
-      color: #e2b96f;
-    }
-
-    .tab-inactive {
-      border-bottom: 2px solid transparent;
-      color: rgba(255, 255, 255, 0.3);
-    }
-
-    .tab-inactive:hover {
-      color: rgba(255, 255, 255, 0.5);
-    }
   </style>
 </head>
 
@@ -237,17 +207,10 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useCallback, useEffect, useRef } = React;
-    const API_BASE = "";
+    const { useState, useCallback } = React;
+    const API_BASE = "http://localhost:8000";
 
-    /* ── Emoji map by category ── */
-    const CATEGORY_EMOJI = {
-      "Electronics": "💻", "Fashion": "👗", "Beauty": "💄", "Sports": "⚽",
-      "Books": "📚", "Home & Kitchen": "🏠", "Toys": "🧸", "Beauty & Health": "💊",
-      "Books & Media": "📖", default: "📦",
-    };
-    const getEmoji = (cat) => CATEGORY_EMOJI[cat] || CATEGORY_EMOJI.default;
-
+    /* ── Product image gradients (no external images needed) ── */
     const GRADIENTS = [
       "linear-gradient(135deg, #1a1a3e 0%, #2d1b69 100%)",
       "linear-gradient(135deg, #16213e 0%, #0f3460 100%)",
@@ -257,8 +220,17 @@
       "linear-gradient(135deg, #0f3460 0%, #16213e 100%)",
       "linear-gradient(135deg, #533483 0%, #1a1a2e 100%)",
       "linear-gradient(135deg, #16213e 0%, #2d1b69 100%)",
-      "linear-gradient(135deg, #2d1b69 0%, #0f3460 100%)",
-      "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+    ];
+
+    const MOCK_PRODUCTS = [
+      { id: 1, name: "Wireless Headphones", price: 129.99, category: "Audio", emoji: "🎧" },
+      { id: 2, name: "Mechanical Keyboard", price: 89.99, category: "Peripherals", emoji: "⌨️" },
+      { id: 3, name: "Ultrawide Monitor", price: 499.99, category: "Display", emoji: "🖥️" },
+      { id: 4, name: "Ergonomic Mouse", price: 59.99, category: "Peripherals", emoji: "🖱️" },
+      { id: 5, name: "USB-C Hub", price: 45.99, category: "Accessories", emoji: "🔌" },
+      { id: 6, name: "Webcam Pro 4K", price: 149.99, category: "Video", emoji: "📷" },
+      { id: 7, name: "Standing Desk Mat", price: 34.99, category: "Ergonomics", emoji: "🟫" },
+      { id: 8, name: "Laptop Stand", price: 29.99, category: "Accessories", emoji: "💻" },
     ];
 
     const REC_GRADIENTS = [
@@ -268,37 +240,34 @@
       "linear-gradient(135deg,#e76f51,#c44d30)",
       "linear-gradient(135deg,#023e8a,#0353a4)",
     ];
+    const MOCK_RECOMMENDATIONS = [
+      { id: 9, name: "Noise-Cancelling Buds", emoji: "🎵" },
+      { id: 10, name: "Smart LED Strip", emoji: "💡" },
+      { id: 11, name: "Desk Organizer", emoji: "📦" },
+      { id: 12, name: "Cable Management Kit", emoji: "🔧" },
+      { id: 13, name: "Monitor Light Bar", emoji: "🌟" },
+    ];
 
     /* ── Components ── */
 
-    function PriceTag({ price, basePrice, flash, trending }) {
+    function PriceTag({ price, flash, trending }) {
       const color = flash === "up" ? "#4ade80" : flash === "down" ? "#f87171" : "#e2b96f";
       const cls = flash === "up" ? "price-flash-up" : flash === "down" ? "price-flash-down" : "";
-      const pctChange = basePrice ? (((price - basePrice) / basePrice) * 100).toFixed(1) : 0;
-      const showPct = Math.abs(pctChange) > 0.5;
-
       return (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <span className={`text-lg font-bold font-mono transition-colors duration-300 ${cls}`} style={{ color }}>
-            ${Number(price).toFixed(2)}
+            ₹{Number(price).toFixed(2)}
           </span>
-          {showPct && (
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${pctChange > 0 ? "bg-green-400/15 text-green-400 border border-green-400/30" :
-                "bg-red-400/15 text-red-400 border border-red-400/30"
-              }`}>
-              {pctChange > 0 ? "+" : ""}{pctChange}%
-            </span>
-          )}
           {trending && (
-            <span className="trending-badge text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-400/15 text-orange-400 border border-orange-400/30 tracking-wider">
-              🔥 HOT
+            <span className="trending-badge text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400 border border-green-400/30 tracking-wider">
+              🔥 TREND
             </span>
           )}
         </div>
       );
     }
 
-    function ProductCard({ product, index, isClicked, flashState, onClick }) {
+    function ProductCard({ product, index, isClicked, flashState }) {
       const flashClass = flashState === "up" ? "flash-up" : flashState === "down" ? "flash-down" : "";
       return (
         <div
@@ -307,42 +276,29 @@
             background: isClicked ? "rgba(226,185,111,0.08)" : "rgba(255,255,255,0.03)",
             border: isClicked ? "1px solid rgba(226,185,111,0.5)" : "1px solid rgba(255,255,255,0.07)",
           }}
-          onClick={() => onClick(product)}
         >
           {isClicked && (
             <div className="absolute top-2 right-2 z-10 text-[9px] font-bold px-2 py-0.5 rounded-full tracking-widest" style={{ background: "rgba(226,185,111,0.9)", color: "#0a0a12" }}>
               SELECTED
             </div>
           )}
-          <div className="relative flex items-center justify-center" style={{ background: GRADIENTS[index % GRADIENTS.length], aspectRatio: "1", minHeight: 120 }}>
-            <span className="text-4xl select-none drop-shadow-lg">{getEmoji(product.category)}</span>
+          {/* Gradient image area with centered emoji */}
+          <div className="relative flex items-center justify-center" style={{ background: GRADIENTS[index % GRADIENTS.length], aspectRatio: "1", minHeight: 140 }}>
+            <span className="text-5xl select-none drop-shadow-lg">{product.emoji}</span>
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(10,10,18,0.5) 0%, transparent 40%)" }} />
             <span className="absolute bottom-1.5 left-2.5 text-[9px] font-semibold text-white/50 tracking-[0.12em] uppercase">
               {product.category}
             </span>
-            {product.clicks > 3 && (
-              <span className="absolute top-2 left-2 text-[8px] font-bold px-1.5 py-0.5 rounded bg-purple-500/80 text-white">
-                {product.clicks} clicks
-              </span>
-            )}
           </div>
           <div className="px-3 py-2.5">
-            <p className="text-[12px] font-medium text-white/90 leading-tight mb-1 m-0 truncate" title={product.name}>
-              {product.name.length > 30 ? product.name.substring(0, 30) + "…" : product.name}
-            </p>
-            <p className="text-[10px] text-white/30 mb-1 m-0">{product.brand}</p>
-            <PriceTag
-              price={product.current_price}
-              basePrice={product.base_price}
-              flash={flashState}
-              trending={product.clicks > 5}
-            />
+            <p className="text-[13px] font-medium text-white/90 leading-tight mb-1.5 m-0">{product.name}</p>
+            <PriceTag price={product.price} flash={flashState} trending={flashState === "up"} />
           </div>
         </div>
       );
     }
 
-    function RecommendationCard({ rec, index, isNew }) {
+    function RecommendationCard({ product, index, isNew }) {
       return (
         <div
           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${isNew ? "rec-new" : ""}`}
@@ -352,82 +308,22 @@
           }}
         >
           <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: REC_GRADIENTS[index % REC_GRADIENTS.length] }}>
-            {getEmoji(rec.category)}
+            {product.emoji}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-medium text-white/85 truncate m-0">{rec.name}</p>
-            <p className="text-[9px] text-white/30 m-0">{rec.reason || rec.category}</p>
-            {rec.price && <p className="text-[11px] font-mono text-gold m-0">${Number(rec.price).toFixed(2)}</p>}
+            <p className="text-[12px] font-medium text-white/85 truncate m-0">{product.name}</p>
+            {isNew && <p className="text-[10px] text-gold mt-0.5 m-0">Just added</p>}
           </div>
+          <span className="text-xs text-white/15">›</span>
         </div>
       );
     }
 
-    function RationaleBox({ rationale }) {
-      if (!rationale || rationale.length === 0) return null;
-      return (
-        <div className="fade-in rounded-xl px-4 py-3 mt-3" style={{ background: "rgba(226,185,111,0.04)", border: "1px solid rgba(226,185,111,0.15)" }}>
-          <p className="text-[10px] tracking-[0.12em] text-gold/60 font-semibold mb-2 m-0">PRICE RATIONALE</p>
-          {rationale.map((r, i) => (
-            <p key={i} className="text-[11px] text-white/70 m-0 mb-1 leading-snug">{r}</p>
-          ))}
-        </div>
-      );
-    }
-
-    function StatBox({ label, value, color }) {
+    function StatBox({ label, value }) {
       return (
         <div className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
           <p className="text-[9px] tracking-[0.1em] text-white/30 font-medium m-0">{label}</p>
-          <p className="text-base font-semibold font-mono m-0" style={{ color: color || "#e2b96f" }}>{value}</p>
-        </div>
-      );
-    }
-
-    function ABTestPanel({ analytics }) {
-      if (!analytics) return null;
-      const { ab_test } = analytics;
-      return (
-        <div className="fade-in rounded-xl px-4 py-3 mt-3" style={{ background: "rgba(74,222,128,0.03)", border: "1px solid rgba(74,222,128,0.1)" }}>
-          <p className="text-[10px] tracking-[0.12em] text-green-400/60 font-semibold mb-2 m-0">A/B TEST RESULTS</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] text-white/40 m-0">Group A (Static)</p>
-              <p className="text-sm font-mono text-white/70 m-0">{ab_test.group_a_static.conversion_rate}% conv</p>
-              <p className="text-[10px] text-white/30 m-0">{ab_test.group_a_static.sessions} sessions</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-white/40 m-0">Group B (Dynamic)</p>
-              <p className="text-sm font-mono text-green-400 m-0">{ab_test.group_b_dynamic.conversion_rate}% conv</p>
-              <p className="text-[10px] text-white/30 m-0">{ab_test.group_b_dynamic.sessions} sessions</p>
-            </div>
-          </div>
-          <p className="text-[11px] text-green-400/80 mt-2 m-0 font-medium">{ab_test.summary}</p>
-        </div>
-      );
-    }
-
-    function EventLog({ events }) {
-      if (!events || events.length === 0) return null;
-      return (
-        <div className="mt-3 rounded-xl px-4 py-3" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          <p className="text-[10px] tracking-[0.12em] text-white/30 font-semibold mb-2 m-0">EVENT LOG</p>
-          {events.slice(-5).reverse().map((evt, i) => (
-            <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: i < 4 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-mono ${evt.direction === "up" ? "text-green-400" : evt.direction === "down" ? "text-red-400" : "text-white/30"}`}>
-                  {evt.direction === "up" ? "▲" : evt.direction === "down" ? "▼" : "─"}
-                </span>
-                <span className="text-[10px] text-white/50 truncate max-w-[120px]">{evt.product_name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/30">{evt.latency_ms}ms</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${evt.ab_group === "B" ? "bg-green-400/10 text-green-400" : "bg-blue-400/10 text-blue-400"}`}>
-                  {evt.ab_group}
-                </span>
-              </div>
-            </div>
-          ))}
+          <p className="text-base font-semibold font-mono text-gold m-0">{value}</p>
         </div>
       );
     }
@@ -435,186 +331,117 @@
     /* ── Main App ── */
 
     function App() {
-      const [products, setProducts] = useState([]);
-      const [recommendations, setRecommendations] = useState([]);
+      const [products, setProducts] = useState(MOCK_PRODUCTS);
+      const [recommendations, setRecommendations] = useState(MOCK_RECOMMENDATIONS.slice(0, 4));
       const [loading, setLoading] = useState(false);
-      const [initialLoading, setInitialLoading] = useState(true);
       const [clickedId, setClickedId] = useState(null);
       const [flashStates, setFlashStates] = useState({});
       const [newRecIds, setNewRecIds] = useState(new Set());
       const [lastAction, setLastAction] = useState(null);
       const [simCount, setSimCount] = useState(0);
-      const [rationale, setRationale] = useState([]);
-      const [eventLog, setEventLog] = useState([]);
-      const [analytics, setAnalytics] = useState(null);
-      const [avgLatency, setAvgLatency] = useState(0);
-      const [connected, setConnected] = useState(false);
-      const [activeTab, setActiveTab] = useState("recs");
-      const sessionId = useRef("S" + Math.floor(Math.random() * 10000));
-      const userId = useRef("U" + Math.floor(Math.random() * 500));
-      const latencies = useRef([]);
+      const [showLogin, setShowLogin] = useState(false);
 
-      // ── Load products on mount ──
-      useEffect(() => {
-        async function loadProducts() {
-          try {
-            const res = await fetch(`${API_BASE}/products?limit=20`);
-            if (res.ok) {
-              const data = await res.json();
-              setProducts(data.products || []);
-              setConnected(true);
-            }
-          } catch (e) {
-            console.warn("API not available, using demo mode");
-            setConnected(false);
-          } finally {
-            setInitialLoading(false);
-          }
-        }
-        loadProducts();
-      }, []);
-
-      // ── Click a specific product card ──
-      const clickProduct = useCallback(async (product) => {
+      const simulateClick = useCallback(async () => {
         if (loading) return;
         setLoading(true);
         setSimCount((c) => c + 1);
-        setClickedId(product.sku_id);
 
-        const eventTypes = ["click", "click", "click", "view", "add_to_cart", "purchase"];
-        const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+        const randomProduct = products[Math.floor(Math.random() * products.length)];
+        setClickedId(randomProduct.id);
 
         try {
-          const res = await fetch(
-            `${API_BASE}/event?sku_id=${product.sku_id}&event_type=${eventType}&user_id=${userId.current}&session_id=${sessionId.current}`,
-            { method: "POST" }
-          );
+          let newPrice = randomProduct.price;
+          let priceChanged = false;
 
-          if (res.ok) {
-            const data = await res.json();
-
-            // Update price
-            setProducts((prev) => prev.map((p) =>
-              p.sku_id === product.sku_id
-                ? { ...p, current_price: data.new_price, clicks: data.demand_clicks, inventory: data.inventory }
-                : p
-            ));
-
-            // Flash effect
-            setFlashStates((prev) => ({ ...prev, [product.sku_id]: data.direction === "up" ? "up" : data.direction === "down" ? "down" : null }));
-            setTimeout(() => setFlashStates((prev) => ({ ...prev, [product.sku_id]: null })), 2500);
-
-            // Update rationale
-            setRationale(data.rationale || []);
-
-            // Update recommendations
-            if (data.recommendations) {
-              const oldIds = new Set(recommendations.map((r) => r.sku_id));
-              const freshIds = new Set(data.recommendations.map((r) => r.sku_id).filter((id) => !oldIds.has(id)));
-              setRecommendations(data.recommendations);
-              setNewRecIds(freshIds);
-              setTimeout(() => setNewRecIds(new Set()), 3000);
+          try {
+            const priceRes = await fetch(`${API_BASE}/price?product_id=${randomProduct.id}`);
+            if (priceRes.ok) {
+              const priceData = await priceRes.json();
+              newPrice = priceData.price ?? newPrice;
+              priceChanged = true;
             }
-
-            // Track latency
-            latencies.current.push(data.latency_ms);
-            if (latencies.current.length > 20) latencies.current.shift();
-            setAvgLatency(Math.round(latencies.current.reduce((a, b) => a + b, 0) / latencies.current.length));
-
-            // Event log
-            setEventLog((prev) => [...prev, {
-              product_name: data.product_name,
-              direction: data.direction,
-              latency_ms: data.latency_ms,
-              ab_group: data.ab_group,
-              event_type: eventType,
-            }].slice(-20));
-
-            // Last action
-            const arrow = data.direction === "up" ? "▲" : data.direction === "down" ? "▼" : "─";
-            setLastAction(`${eventType}: ${data.product_name.substring(0, 20)} $${data.old_price.toFixed(2)} → $${data.new_price.toFixed(2)} ${arrow} [${data.ab_group}]`);
+          } catch {
+            const delta = Math.random() * 0.25 - 0.05;
+            newPrice = +(randomProduct.price * (1 + delta)).toFixed(2);
+            priceChanged = true;
           }
-        } catch (e) {
-          console.warn("Event failed:", e);
+
+          const priceUp = newPrice > randomProduct.price;
+          setLastAction(`${randomProduct.name}: ₹${randomProduct.price.toFixed(2)} → ₹${newPrice.toFixed(2)} ${priceUp ? "▲" : "▼"}`);
+
+          if (priceChanged) {
+            setFlashStates((prev) => ({ ...prev, [randomProduct.id]: priceUp ? "up" : "down" }));
+            setProducts((prev) => prev.map((p) => (p.id === randomProduct.id ? { ...p, price: newPrice } : p)));
+            setTimeout(() => setFlashStates((prev) => ({ ...prev, [randomProduct.id]: null })), 2500);
+          }
+
+          let newRecs = recommendations;
+          try {
+            const recRes = await fetch(`${API_BASE}/recommendations?user_id=1`);
+            if (recRes.ok) {
+              const recData = await recRes.json();
+              newRecs = recData.recommendations ?? newRecs;
+            }
+          } catch {
+            newRecs = [...MOCK_RECOMMENDATIONS].sort(() => Math.random() - 0.5).slice(0, 4);
+          }
+
+          const freshIds = new Set(newRecs.map((r) => r.id).filter((id) => !recommendations.find((r) => r.id === id)));
+          setRecommendations(newRecs);
+          setNewRecIds(freshIds);
+          setTimeout(() => setNewRecIds(new Set()), 3000);
         } finally {
           setLoading(false);
         }
       }, [products, recommendations, loading]);
 
-      // ── Simulate random click ──
-      const simulateClick = useCallback(() => {
-        if (products.length === 0) return;
-        const randomProduct = products[Math.floor(Math.random() * products.length)];
-        clickProduct(randomProduct);
-      }, [products, clickProduct]);
-
-      // ── Fetch analytics ──
-      const fetchAnalytics = useCallback(async () => {
-        try {
-          const res = await fetch(`${API_BASE}/analytics`);
-          if (res.ok) {
-            setAnalytics(await res.json());
-          }
-        } catch (e) { }
-      }, []);
-
-      useEffect(() => {
-        if (simCount > 0 && simCount % 3 === 0) fetchAnalytics();
-      }, [simCount, fetchAnalytics]);
-
-      const avgPrice = products.length > 0
-        ? (products.reduce((s, p) => s + p.current_price, 0) / products.length).toFixed(0)
-        : "—";
-
-      if (initialLoading) {
-        return (
-          <div className="min-h-screen font-outfit text-white flex items-center justify-center" style={{ background: "#0a0a12" }}>
-            <div className="text-center">
-              <div className="spinner mx-auto mb-4" style={{ width: 32, height: 32 }}></div>
-              <p className="text-white/40 text-sm">Loading APEX Engine...</p>
-            </div>
-          </div>
-        );
-      }
+      const avgPrice = (products.reduce((s, p) => s + p.price, 0) / products.length).toFixed(0);
 
       return (
         <div className="min-h-screen font-outfit text-white" style={{ background: "#0a0a12" }}>
 
-          {/* ── Header ── */}
-          <header className="sticky top-0 z-50 flex items-center justify-between px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(10,10,18,0.88)", backdropFilter: "blur(14px)" }}>
+          {/* ── Sticky Header ── */}
+          <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(10,10,18,0.88)", backdropFilter: "blur(14px)" }}>
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-md flex items-center justify-center text-sm" style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)" }}>◈</div>
-              <span className="font-playfair text-lg text-gold">APEX</span>
-              <span className="text-[10px] text-white/25 tracking-[0.15em] hidden sm:inline">DYNAMIC PRICING ENGINE</span>
+              <span className="font-playfair text-lg text-gold">Smart Shop</span>
+              <span className="text-[10px] text-white/25 tracking-[0.15em] hidden sm:inline">FASTER PRICING, FAIRER DECISIONS, MEASURABLE RESULTS</span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
+              {/* Last action ticker */}
               {lastAction && (
-                <span className="text-[10px] text-white/30 font-mono hidden lg:inline truncate max-w-xs">
+                <span className="text-[11px] text-white/35 font-mono hidden md:inline truncate max-w-xs">
                   {lastAction}
                 </span>
               )}
 
-              {/* Latency indicator */}
-              <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: "rgba(74,222,128,0.05)", border: "1px solid rgba(74,222,128,0.1)" }}>
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: avgLatency < 200 ? "#4ade80" : "#f87171" }} />
-                <span className="text-[10px] font-mono" style={{ color: avgLatency < 200 ? "#4ade80" : "#f87171" }}>
-                  {avgLatency || "—"}ms
-                </span>
-              </div>
-
-              {/* Run counter */}
+              {/* Sim counter */}
               <div className="text-right">
-                <p className="text-[8px] text-white/20 tracking-[0.1em] m-0 leading-none">EVENTS</p>
-                <p className="text-base font-mono text-gold font-medium m-0 leading-tight">{String(simCount).padStart(3, "0")}</p>
+                <p className="text-[9px] text-white/25 tracking-[0.1em] m-0 leading-none">RUNS</p>
+                <p className="text-lg font-mono text-gold font-medium m-0 leading-tight">{String(simCount).padStart(3, "0")}</p>
               </div>
 
-              {/* Simulate Button */}
+              {/* Login Button */}
+              <button
+                className="sim-btn rounded-xl px-4 py-2.5 text-[13px] font-semibold tracking-wide border-none"
+                onClick={() => setShowLogin(true)}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "#e2b96f",
+                  border: "1px solid rgba(226,185,111,0.3)",
+                  fontFamily: "Outfit, sans-serif",
+                }}
+              >
+                🔐 Login
+              </button>
+
+              {/* Simulate Button — right in the header */}
               <button
                 id="simulate-btn"
-                className="sim-btn rounded-xl px-4 py-2 text-[12px] font-semibold tracking-wide border-none flex items-center gap-2"
+                className="sim-btn rounded-xl px-5 py-2.5 text-[13px] font-semibold tracking-wide border-none flex items-center gap-2"
                 onClick={simulateClick}
-                disabled={loading || products.length === 0}
+                disabled={loading}
                 style={{
                   background: loading ? "rgba(226,185,111,0.1)" : "linear-gradient(135deg, #e2b96f 0%, #c8973e 100%)",
                   color: loading ? "rgba(226,185,111,0.5)" : "#0a0a12",
@@ -628,108 +455,153 @@
             </div>
           </header>
 
-          {/* ── Main ── */}
-          <div className="max-w-screen-xl mx-auto px-5 pt-5 pb-12">
-            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: "1fr 300px" }}>
+          {/* ── Main Content ── */}
+          <div className="max-w-screen-xl mx-auto px-6 pt-5 pb-12">
+            <div className="grid gap-6 items-start" style={{ gridTemplateColumns: "1fr 280px" }}>
 
               {/* ── Product Grid ── */}
               <section>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h1 className="text-[12px] tracking-[0.15em] text-white/30 font-medium m-0">PRODUCT CATALOG</h1>
-                    <p className="text-lg font-semibold text-white mt-0.5 m-0">{products.length} Products · Real Data</p>
+                    <h1 className="text-[13px] tracking-[0.15em] text-white/30 font-medium m-0">CATALOG</h1>
+                    <p className="text-xl font-semibold text-white mt-0.5 m-0">{products.length} Products</p>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: connected ? "#4ade80" : "#f87171", boxShadow: connected ? "0 0 4px rgba(74,222,128,0.6)" : "0 0 4px rgba(248,113,113,0.6)" }} />
-                    <span className="text-[10px] text-white/25 font-mono">{connected ? "localhost:8000" : "connected"}</span>
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#4ade80", boxShadow: "0 0 4px rgba(74,222,128,0.6)" }} />
+                    <span className="text-[10px] text-white/25 font-mono">localhost:8000</span>
                   </div>
                 </div>
 
-                {products.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-white/30 text-sm">No products loaded. Start the backend: <code className="text-gold/60">python server.py</code></p>
-                  </div>
-                ) : (
-                  <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))" }}>
-                    {products.map((product, i) => (
-                      <ProductCard
-                        key={product.sku_id}
-                        product={product}
-                        index={i}
-                        isClicked={product.sku_id === clickedId}
-                        flashState={flashStates[product.sku_id] ?? null}
-                        onClick={clickProduct}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Price Rationale (below grid) */}
-                <RationaleBox rationale={rationale} />
+                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))" }}>
+                  {products.map((product, i) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      index={i}
+                      isClicked={product.id === clickedId}
+                      flashState={flashStates[product.id] ?? null}
+                    />
+                  ))}
+                </div>
               </section>
 
               {/* ── Sidebar ── */}
               <aside className="sticky top-16">
-                {/* Tab Navigation */}
-                <div className="flex gap-4 mb-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-                  <button
-                    className={`text-[11px] tracking-[0.1em] font-semibold pb-2 transition-colors ${activeTab === "recs" ? "tab-active" : "tab-inactive"}`}
-                    onClick={() => setActiveTab("recs")}
-                  >
-                    AI PICKS
-                  </button>
-                  <button
-                    className={`text-[11px] tracking-[0.1em] font-semibold pb-2 transition-colors ${activeTab === "analytics" ? "tab-active" : "tab-inactive"}`}
-                    onClick={() => { setActiveTab("analytics"); fetchAnalytics(); }}
-                  >
-                    ANALYTICS
-                  </button>
+                <div className="mb-3">
+                  <h2 className="text-[13px] tracking-[0.15em] text-white/30 font-medium m-0">AI PICKS</h2>
+                  <p className="text-xl font-semibold text-white mt-0.5 m-0">Recommended</p>
                 </div>
 
-                {activeTab === "recs" ? (
-                  <>
-                    <p className="text-lg font-semibold text-white mt-1 mb-3 m-0">Recommended For You</p>
-                    <div className="flex flex-col gap-1.5">
-                      {recommendations.length > 0 ? recommendations.map((rec, i) => (
-                        <RecommendationCard key={rec.sku_id || i} rec={rec} index={i} isNew={newRecIds.has(rec.sku_id)} />
-                      )) : (
-                        <p className="text-[11px] text-white/20 py-4">Click a product to get recommendations</p>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-lg font-semibold text-white mt-1 mb-3 m-0">Live Analytics</p>
-                    <ABTestPanel analytics={analytics} />
-                  </>
-                )}
+                <div className="flex flex-col gap-1.5">
+                  {recommendations.map((rec, i) => (
+                    <RecommendationCard key={rec.id} product={rec} index={i} isNew={newRecIds.has(rec.id)} />
+                  ))}
+                </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  <StatBox label="AVG PRICE" value={`$${avgPrice}`} />
-                  <StatBox label="LATENCY" value={`${avgLatency}ms`} color={avgLatency < 200 ? "#4ade80" : "#f87171"} />
-                  <StatBox label="EVENTS" value={simCount} />
-                  <StatBox label="SESSION" value={sessionId.current.slice(0, 5)} />
+                <div className="grid grid-cols-2 gap-2 mt-5">
+                  <StatBox label="AVG PRICE" value={`₹${avgPrice}`} />
+                  <StatBox label="UPDATES" value={simCount} />
+                  <StatBox label="PRODUCTS" value={products.length} />
+                  <StatBox label="TRENDING" value={Object.values(flashStates).filter((v) => v === "up").length} />
                 </div>
 
-                {/* Event Log */}
-                <EventLog events={eventLog} />
-
-                {/* System Architecture Info */}
-                <div className="mt-3 px-3 py-2.5 rounded-lg" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[9px] tracking-[0.1em] text-white/20 font-semibold mb-1.5 m-0">SYSTEM</p>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-[10px] text-white/30 m-0">📊 In-memory Python dict store</p>
-                    <p className="text-[10px] text-white/30 m-0">⚡ Sub-200ms pricing pipeline</p>
-                    <p className="text-[10px] text-white/30 m-0">🛡️ Hard price ceiling: +15%</p>
-                    <p className="text-[10px] text-white/30 m-0">🧪 A/B: Static vs Dynamic pricing</p>
-                    <p className="text-[10px] text-white/30 m-0">🤖 Session-based recommendations</p>
+                {/* API Status */}
+                <div className="mt-3 px-3 py-2.5 rounded-lg flex items-center gap-2" style={{ background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)" }}>
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#4ade80", boxShadow: "0 0 5px rgba(74,222,128,0.6)" }} />
+                  <div>
+                    <p className="text-[11px] text-green-400/80 font-medium m-0">Live simulation active</p>
+                    <p className="text-[10px] text-white/20 m-0">Mock fallback on API failure</p>
                   </div>
                 </div>
               </aside>
 
             </div>
           </div>
+
+          {/* Login Modal */}
+          {showLogin && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(10,10,18,0.8)", backdropFilter: "blur(8px)" }}>
+              <div className="bg-surface-card rounded-2xl p-8 max-w-md w-full mx-4 relative" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+                {/* Close button */}
+                <button
+                  onClick={() => setShowLogin(false)}
+                  className="absolute top-4 right-4 text-white/40 hover:text-white/70 transition-colors"
+                >
+                  ✕
+                </button>
+
+                {/* Header */}
+                <div className="text-center mb-6">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)" }}>
+                    🔐
+                  </div>
+                  <h2 className="text-xl font-playfair text-gold mb-1">Welcome Back</h2>
+                  <p className="text-sm text-white/60">Sign in to your Smart Shop account</p>
+                </div>
+
+                {/* Login Form */}
+                <form className="space-y-4">
+                  {/* Email/Mobile Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-2">Email or Mobile Number</label>
+                    <input
+                      type="text"
+                      placeholder="Enter email or mobile number"
+                      className="w-full px-4 py-3 rounded-xl bg-surface border text-white placeholder-white/40 focus:outline-none focus:ring-2 transition-all"
+                      style={{
+                        borderColor: "rgba(255,255,255,0.07)",
+                        background: "rgba(255,255,255,0.03)",
+                        fontFamily: "Outfit, sans-serif"
+                      }}
+                    />
+                  </div>
+
+                  {/* Password Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-white/80 mb-2">Password</label>
+                    <input
+                      type="password"
+                      placeholder="Enter your password"
+                      className="w-full px-4 py-3 rounded-xl bg-surface border text-white placeholder-white/40 focus:outline-none focus:ring-2 transition-all"
+                      style={{
+                        borderColor: "rgba(255,255,255,0.07)",
+                        background: "rgba(255,255,255,0.03)",
+                        fontFamily: "Outfit, sans-serif"
+                      }}
+                    />
+                  </div>
+
+                  {/* Remember me & Forgot password */}
+                  <div className="flex items-center justify-between text-sm">
+                    <label className="flex items-center gap-2 text-white/60">
+                      <input type="checkbox" className="rounded" />
+                      Remember me
+                    </label>
+                    <a href="#" className="text-gold hover:text-gold-light transition-colors">Forgot password?</a>
+                  </div>
+
+                  {/* Login Button */}
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl font-semibold text-sm tracking-wide transition-all"
+                    style={{
+                      background: "linear-gradient(135deg, #e2b96f 0%, #c8973e 100%)",
+                      color: "#0a0a12",
+                      fontFamily: "Outfit, sans-serif"
+                    }}
+                  >
+                    Sign In
+                  </button>
+
+                  {/* Sign up link */}
+                  <div className="text-center text-sm text-white/60">
+                    Don't have an account? <a href="#" className="text-gold hover:text-gold-light transition-colors">Sign up</a>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
