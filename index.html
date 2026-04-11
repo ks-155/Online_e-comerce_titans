@@ -5,14 +5,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Shop — Dynamic Pricing Engine</title>
-  <meta name="description" content="Real-time dynamic pricing and recommendation engine demo" />
+  <meta name="description"
+    content="Premium tech products with real-time dynamic pricing and AI-powered recommendations" />
 
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&family=Outfit:wght@300;400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700;900&family=Outfit:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet" />
 
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -25,40 +28,482 @@
           },
           colors: {
             gold: { DEFAULT: "#e2b96f", dark: "#c8973e", light: "#f0d49a" },
-            surface: { DEFAULT: "#0a0a12", card: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.07)" },
+            surface: { DEFAULT: "#080810", card: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.07)" },
           },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'shimmer': 'shimmer 2s linear infinite',
+            'glow': 'glow 2s ease-in-out infinite alternate',
+          }
         },
       },
     };
   </script>
 
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- AOS — Animate on Scroll -->
+  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css" />
+  <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+
+  <!-- GSAP for advanced animations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    body {
-      margin: 0;
-      background: #0a0a12;
-      overflow-x: hidden;
+    :root {
+      --gold: #e2b96f;
+      --gold-dark: #c8973e;
+      --gold-light: #f0d49a;
+      --bg: #080810;
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --border: rgba(255, 255, 255, 0.07);
     }
 
-    *,
-    *::before,
-    *::after {
+    * {
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      overflow-x: hidden;
+      font-family: 'Outfit', sans-serif;
+      color: #fff;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(226, 185, 111, 0.25);
+      border-radius: 4px;
+    }
+
+    /* ── Three.js Canvas ── */
+    #three-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Hero ── */
+    .hero-section {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(226, 185, 111, 0.12) 0%, transparent 70%),
+        linear-gradient(180deg, #080810 0%, #0a0a18 100%);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(226, 185, 111, 0.08);
+      border: 1px solid rgba(226, 185, 111, 0.25);
+      border-radius: 99px;
+      padding: 6px 16px;
+      font-size: 12px;
+      color: var(--gold-light);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 500;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.8);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.6;
+        transform: scale(0.85);
+      }
+    }
+
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(3rem, 8vw, 7rem);
+      font-weight: 900;
+      line-height: 1.0;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 30%, var(--gold) 70%, var(--gold-dark) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 36px;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'Outfit', sans-serif;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      border: none;
+      outline: none;
+    }
+
+    .hero-cta-primary {
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #080810;
+      box-shadow: 0 8px 32px rgba(226, 185, 111, 0.35);
+    }
+
+    .hero-cta-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(226, 185, 111, 0.45);
+    }
+
+    .hero-cta-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-cta-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-3px);
+    }
+
+    /* ── Floating stats in hero ── */
+    .hero-stat-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 16px 20px;
+      backdrop-filter: blur(20px);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(226, 185, 111, 0.4), transparent);
+    }
+
+    /* ── Marquee ── */
+    .marquee-wrapper {
+      overflow: hidden;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.015);
+      padding: 14px 0;
+    }
+
+    .marquee-track {
+      display: flex;
+      gap: 60px;
+      animation: marquee 30s linear infinite;
+      width: max-content;
+    }
+
+    @keyframes marquee {
+      from {
+        transform: translateX(0);
+      }
+
+      to {
+        transform: translateX(-50%);
+      }
+    }
+
+    .marquee-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .marquee-item span {
+      color: var(--gold);
+      font-size: 16px;
+    }
+
+    /* ── Section ── */
+    .section-label {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 700;
+      line-height: 1.15;
+      background: linear-gradient(135deg, #fff 60%, rgba(255, 255, 255, 0.6));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Product Card (upgraded) ── */
     .product-card {
-      transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+      border-radius: 20px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        border-color 0.3s ease,
+        box-shadow 0.4s ease;
+      cursor: pointer;
+      position: relative;
     }
 
     .product-card:hover {
-      transform: translateY(-5px);
-      border-color: rgba(226, 185, 111, 0.4) !important;
-      box-shadow: 0 16px 48px rgba(226, 185, 111, 0.1);
+      transform: translateY(-8px) scale(1.01);
+      border-color: rgba(226, 185, 111, 0.4);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(226, 185, 111, 0.15), 0 8px 32px rgba(226, 185, 111, 0.12);
     }
 
+    .product-img-wrapper {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 1;
+    }
+
+    .product-img-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s ease;
+    }
+
+    .product-card:hover .product-img-wrapper img {
+      transform: scale(1.08);
+    }
+
+    .product-img-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(8, 8, 16, 0.85) 0%, rgba(8, 8, 16, 0.2) 40%, transparent 70%);
+    }
+
+    .product-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 99px;
+      backdrop-filter: blur(12px);
+    }
+
+    .product-badge-selected {
+      background: rgba(226, 185, 111, 0.9);
+      color: #080810;
+    }
+
+    .product-badge-hot {
+      background: rgba(239, 68, 68, 0.85);
+      color: #fff;
+    }
+
+    .product-badge-new {
+      background: rgba(74, 222, 128, 0.85);
+      color: #080810;
+    }
+
+    .product-wishlist {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .product-wishlist:hover {
+      background: rgba(255, 60, 60, 0.25);
+      transform: scale(1.1);
+    }
+
+    .product-category-tag {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .add-to-cart-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #080810;
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.2s;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .add-to-cart-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .add-to-cart-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* ── Price animations ── */
+    @keyframes priceUp {
+      0% {
+        transform: scale(1.25);
+        color: #4ade80;
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes priceDown {
+      0% {
+        transform: scale(1.25);
+        color: #f87171;
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .price-flash-up {
+      animation: priceUp 0.5s ease-out;
+    }
+
+    .price-flash-down {
+      animation: priceDown 0.5s ease-out;
+    }
+
+    @keyframes flashGreen {
+      0% {
+        box-shadow: inset 0 0 0 2px rgba(74, 222, 128, 0.7);
+      }
+
+      100% {
+        box-shadow: inset 0 0 0 2px transparent;
+      }
+    }
+
+    @keyframes flashRed {
+      0% {
+        box-shadow: inset 0 0 0 2px rgba(248, 113, 113, 0.7);
+      }
+
+      100% {
+        box-shadow: inset 0 0 0 2px transparent;
+      }
+    }
+
+    .flash-up {
+      animation: flashGreen 2.5s ease-out;
+    }
+
+    .flash-down {
+      animation: flashRed 2.5s ease-out;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(226, 185, 111, 0.2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── Sim buttons ── */
     .sim-btn {
       position: relative;
       overflow: hidden;
@@ -82,67 +527,25 @@
       transform: scale(0.96) !important;
     }
 
-    .spinner {
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(226, 185, 111, 0.2);
-      border-top-color: #e2b96f;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @keyframes flashGreen {
-      0% {
-        box-shadow: inset 0 0 0 2px rgba(74, 222, 128, 0.6);
-      }
-
-      100% {
-        box-shadow: inset 0 0 0 2px transparent;
-      }
-    }
-
-    @keyframes flashRed {
-      0% {
-        box-shadow: inset 0 0 0 2px rgba(248, 113, 113, 0.6);
-      }
-
-      100% {
-        box-shadow: inset 0 0 0 2px transparent;
-      }
-    }
-
-    .flash-up {
-      animation: flashGreen 2s ease-out;
-    }
-
-    .flash-down {
-      animation: flashRed 2s ease-out;
-    }
-
+    /* ── Rec card ── */
     @keyframes slideIn {
-      0% {
+      from {
         opacity: 0;
-        transform: translateX(12px);
+        transform: translateX(16px);
       }
 
-      100% {
+      to {
         opacity: 1;
         transform: translateX(0);
       }
     }
 
     .rec-new {
-      animation: slideIn 0.4s ease-out;
+      animation: slideIn 0.45s ease-out;
     }
 
-    @keyframes pulse {
+    /* ── Trending ── */
+    @keyframes pulse-trend {
 
       0%,
       100% {
@@ -150,196 +553,759 @@
       }
 
       50% {
-        opacity: 0.65;
+        opacity: 0.6;
       }
     }
 
     .trending-badge {
-      animation: pulse 1.5s ease-in-out infinite;
+      animation: pulse-trend 1.8s ease-in-out infinite;
     }
 
-    @keyframes priceUp {
-      0% {
-        transform: scale(1.2);
-        color: #4ade80;
+    /* ── Nav ── */
+    .nav-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.55);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: color 0.2s;
+      padding: 4px 0;
+      position: relative;
+    }
+
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transition: transform 0.25s ease;
+    }
+
+    .nav-link:hover {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .nav-link:hover::after {
+      transform: scaleX(1);
+    }
+
+    /* ── Category pills ── */
+    .category-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      white-space: nowrap;
+    }
+
+    .category-pill:hover,
+    .category-pill.active {
+      background: rgba(226, 185, 111, 0.1);
+      border-color: rgba(226, 185, 111, 0.35);
+      color: var(--gold);
+    }
+
+    /* ── Features Section ── */
+    .feature-card {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.35s ease;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(226, 185, 111, 0.3), transparent);
+      opacity: 0;
+      transition: opacity 0.35s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(226, 185, 111, 0.2);
+      transform: translateY(-4px);
+    }
+
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+
+    .feature-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Testimonial ── */
+    .testimonial-card {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 20px;
+      padding: 28px;
+      transition: all 0.3s ease;
+    }
+
+    .testimonial-card:hover {
+      border-color: rgba(226, 185, 111, 0.2);
+      transform: translateY(-4px);
+    }
+
+    /* ── Footer ── */
+    .footer-link {
+      color: rgba(255, 255, 255, 0.4);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: var(--gold);
+    }
+
+    /* ── Glassmorphism panel ── */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+    }
+
+    /* ── Number counter animation ── */
+    .count-up {
+      display: inline-block;
+    }
+
+    /* ── Gradient divider ── */
+    .gradient-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(226, 185, 111, 0.25), transparent);
+      border: none;
+      margin: 0;
+    }
+
+    /* ── Cart badge ── */
+    .cart-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 18px;
+      height: 18px;
+      background: var(--gold);
+      color: #080810;
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Toast notification ── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      background: rgba(15, 15, 25, 0.95);
+      border: 1px solid rgba(226, 185, 111, 0.3);
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      animation: toastIn 0.35s ease-out;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
       }
 
-      100% {
-        transform: scale(1);
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
 
-    @keyframes priceDown {
-      0% {
-        transform: scale(1.2);
-        color: #f87171;
-      }
-
-      100% {
-        transform: scale(1);
-      }
+    .toast-icon {
+      font-size: 18px;
     }
 
-    .price-flash-up {
-      animation: priceUp 0.5s ease-out;
+    /* AOS overrides */
+    [data-aos] {
+      pointer-events: none;
     }
 
-    .price-flash-down {
-      animation: priceDown 0.5s ease-out;
-    }
-
-    ::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(226, 185, 111, 0.2);
-      border-radius: 4px;
+    [data-aos].aos-animate {
+      pointer-events: auto;
     }
   </style>
 </head>
 
 <body>
+
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useCallback } = React;
-    const API_BASE = "";
+    const { useState, useCallback, useEffect, useRef } = React;
+    const API_BASE = "http://localhost:8000";
 
-    /* ── Product image gradients (no external images needed) ── */
-    const GRADIENTS = [
-      "linear-gradient(135deg, #1a1a3e 0%, #2d1b69 100%)",
-      "linear-gradient(135deg, #16213e 0%, #0f3460 100%)",
-      "linear-gradient(135deg, #0f3460 0%, #533483 100%)",
-      "linear-gradient(135deg, #1a1a2e 0%, #e94560 50%, #533483 100%)",
-      "linear-gradient(135deg, #16213e 0%, #1a1a3e 100%)",
-      "linear-gradient(135deg, #0f3460 0%, #16213e 100%)",
-      "linear-gradient(135deg, #533483 0%, #1a1a2e 100%)",
-      "linear-gradient(135deg, #16213e 0%, #2d1b69 100%)",
+    /* ─────────────── DATA ─────────────── */
+
+    const PRODUCTS = [
+      {
+        id: 1,
+        name: "Sony WH-1000XM5",
+        subtitle: "Industry-leading noise cancellation",
+        price: 12999,
+        originalPrice: 16990,
+        category: "Audio",
+        badge: "HOT",
+        rating: 4.8,
+        reviews: 2847,
+        img: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 2,
+        name: "Keychron Q1 Pro",
+        subtitle: "Wireless mechanical keyboard",
+        price: 8499,
+        originalPrice: 9999,
+        category: "Peripherals",
+        badge: "NEW",
+        rating: 4.7,
+        reviews: 1203,
+        img: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 3,
+        name: "LG UltraWide 34\"",
+        subtitle: "QHD curved display, 160Hz",
+        price: 36999,
+        originalPrice: 44990,
+        category: "Display",
+        badge: null,
+        rating: 4.9,
+        reviews: 987,
+        img: "https://images.unsplash.com/photo-1527443224154-c4a573d0e31f?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 4,
+        name: "Logitech MX Master 3",
+        subtitle: "Advanced wireless performance mouse",
+        price: 5999,
+        originalPrice: 7495,
+        category: "Peripherals",
+        badge: null,
+        rating: 4.8,
+        reviews: 5621,
+        img: "https://images.unsplash.com/photo-1527814050087-3793815479db?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 5,
+        name: "Anker 12-in-1 Hub",
+        subtitle: "Thunderbolt 4, 4K@60Hz",
+        price: 4299,
+        originalPrice: 5499,
+        category: "Accessories",
+        badge: null,
+        rating: 4.6,
+        reviews: 3420,
+        img: "https://images.unsplash.com/photo-1625842268584-8f3296236761?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 6,
+        name: "Logitech Brio 4K",
+        subtitle: "4K ultra HD webcam with HDR",
+        price: 11499,
+        originalPrice: 13995,
+        category: "Video",
+        badge: "HOT",
+        rating: 4.7,
+        reviews: 2156,
+        img: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 7,
+        name: "Flexispot E7 Pro",
+        subtitle: "Electric standing desk frame",
+        price: 22999,
+        originalPrice: 27999,
+        category: "Ergonomics",
+        badge: "NEW",
+        rating: 4.9,
+        reviews: 712,
+        img: "https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=600&q=80&auto=format&fit=crop",
+      },
+      {
+        id: 8,
+        name: "Twelve South BookArc",
+        subtitle: "Premium vertical laptop stand",
+        price: 3799,
+        originalPrice: 4999,
+        category: "Accessories",
+        badge: null,
+        rating: 4.5,
+        reviews: 892,
+        img: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=80&auto=format&fit=crop",
+      },
     ];
 
-    const MOCK_PRODUCTS = [
-      { id: 1, name: "Wireless Headphones", price: 129.99, category: "Audio", emoji: "🎧" },
-      { id: 2, name: "Mechanical Keyboard", price: 89.99, category: "Peripherals", emoji: "⌨️" },
-      { id: 3, name: "Ultrawide Monitor", price: 499.99, category: "Display", emoji: "🖥️" },
-      { id: 4, name: "Ergonomic Mouse", price: 59.99, category: "Peripherals", emoji: "🖱️" },
-      { id: 5, name: "USB-C Hub", price: 45.99, category: "Accessories", emoji: "🔌" },
-      { id: 6, name: "Webcam Pro 4K", price: 149.99, category: "Video", emoji: "📷" },
-      { id: 7, name: "Standing Desk Mat", price: 34.99, category: "Ergonomics", emoji: "🟫" },
-      { id: 8, name: "Laptop Stand", price: 29.99, category: "Accessories", emoji: "💻" },
+    const RECOMMENDATIONS = [
+      { id: 9, name: "Apple AirPods Pro 2", price: 24900, img: "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=200&q=70&auto=format&fit=crop" },
+      { id: 10, name: "Govee LED Neon Flex", price: 2199, img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200&q=70&auto=format&fit=crop" },
+      { id: 11, name: "Bellroy Desk Caddy", price: 3499, img: "https://images.unsplash.com/photo-1609081819954-fb498b7cd8a0?w=200&q=70&auto=format&fit=crop" },
+      { id: 12, name: "Cable Matters Kit", price: 899, img: "https://images.unsplash.com/photo-1544717302-de2939b7ef71?w=200&q=70&auto=format&fit=crop" },
+      { id: 13, name: "BenQ ScreenBar Plus", price: 8999, img: "https://images.unsplash.com/photo-1555617981-dac3880eac6e?w=200&q=70&auto=format&fit=crop" },
     ];
 
-    const REC_GRADIENTS = [
-      "linear-gradient(135deg,#533483,#2d1b69)",
-      "linear-gradient(135deg,#e84545,#b83030)",
-      "linear-gradient(135deg,#2b9348,#1b6030)",
-      "linear-gradient(135deg,#e76f51,#c44d30)",
-      "linear-gradient(135deg,#023e8a,#0353a4)",
-    ];
-    const MOCK_RECOMMENDATIONS = [
-      { id: 9, name: "Noise-Cancelling Buds", emoji: "🎵" },
-      { id: 10, name: "Smart LED Strip", emoji: "💡" },
-      { id: 11, name: "Desk Organizer", emoji: "📦" },
-      { id: 12, name: "Cable Management Kit", emoji: "🔧" },
-      { id: 13, name: "Monitor Light Bar", emoji: "🌟" },
+    const CATEGORIES = ["All", "Audio", "Peripherals", "Display", "Accessories", "Video", "Ergonomics"];
+
+    const FEATURES = [
+      { icon: "⚡", title: "Real-Time Pricing", desc: "Prices update dynamically based on demand, inventory, and market signals — all in milliseconds.", gradient: "linear-gradient(135deg,#e2b96f22,#c8973e11)" },
+      { icon: "🤖", title: "AI Recommendations", desc: "Our recommendation engine learns from your browsing patterns to surface the most relevant products.", gradient: "linear-gradient(135deg,#7c3aed22,#5b21b611)" },
+      { icon: "🔒", title: "Secure Checkout", desc: "256-bit SSL encryption on every transaction. Your payment data never touches our servers.", gradient: "linear-gradient(135deg,#10b98122,#06966811)" },
+      { icon: "🚀", title: "Same-Day Delivery", desc: "Order before 2 PM and receive your package the same day across 120+ cities.", gradient: "linear-gradient(135deg,#3b82f622,#1d4ed811)" },
     ];
 
-    /* ── Components ── */
+    const TESTIMONIALS = [
+      { name: "Priya Sharma", role: "UI/UX Designer", avatar: "https://i.pravatar.cc/60?img=47", text: "Smart Shop's dynamic pricing is incredible. I got my Sony headphones 18% cheaper than any other platform. The AI recommendations are spot on too!", stars: 5 },
+      { name: "Arjun Mehta", role: "Software Engineer", avatar: "https://i.pravatar.cc/60?img=12", text: "The UX is flawless. Checkout took 30 seconds and same-day delivery actually delivered. Seriously impressed with the quality of products too.", stars: 5 },
+      { name: "Sneha Patel", role: "Product Manager", avatar: "https://i.pravatar.cc/60?img=45", text: "I've been using Smart Shop for 6 months. The price history feature helps me decide the perfect time to buy. Saved ₹12,000 this quarter!", stars: 5 },
+    ];
 
-    function PriceTag({ price, flash, trending }) {
+    /* ─────────────── UTILS ─────────────── */
+
+    function formatPrice(n) {
+      return "₹" + Number(n).toLocaleString("en-IN");
+    }
+
+    function Stars({ count }) {
+      return (
+        <span style={{ color: "#fbbf24", fontSize: 13 }}>
+          {"★".repeat(count)}{"☆".repeat(5 - count)}
+        </span>
+      );
+    }
+
+    /* ─────────────── THREE.JS INIT ─────────────── */
+
+    function initThree(canvas) {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+      camera.position.z = 5;
+
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.setClearColor(0x000000, 0);
+
+      // Particles
+      const particleCount = 200;
+      const positions = new Float32Array(particleCount * 3);
+      const sizes = new Float32Array(particleCount);
+
+      for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 20;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+        sizes[i] = Math.random() * 3 + 1;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+
+      const mat = new THREE.PointsMaterial({
+        color: 0xe2b96f,
+        size: 0.06,
+        transparent: true,
+        opacity: 0.45,
+        sizeAttenuation: true,
+      });
+
+      const particles = new THREE.Points(geo, mat);
+      scene.add(particles);
+
+      // Floating geometric shapes
+      const shapes = [];
+      const shapeGeo = [
+        new THREE.TetrahedronGeometry(0.3),
+        new THREE.OctahedronGeometry(0.25),
+        new THREE.IcosahedronGeometry(0.22),
+      ];
+      const shapeMat = new THREE.MeshBasicMaterial({
+        color: 0xe2b96f,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.15,
+      });
+
+      for (let i = 0; i < 8; i++) {
+        const mesh = new THREE.Mesh(shapeGeo[i % shapeGeo.length], shapeMat);
+        mesh.position.set(
+          (Math.random() - 0.5) * 16,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 5
+        );
+        mesh.userData = {
+          rotX: (Math.random() - 0.5) * 0.01,
+          rotY: (Math.random() - 0.5) * 0.01,
+          floatSpeed: Math.random() * 0.003 + 0.001,
+          floatOffset: Math.random() * Math.PI * 2,
+        };
+        scene.add(mesh);
+        shapes.push(mesh);
+      }
+
+      let frame = 0;
+      let animId;
+
+      function animate() {
+        animId = requestAnimationFrame(animate);
+        frame++;
+
+        particles.rotation.y = frame * 0.0003;
+        particles.rotation.x = frame * 0.0001;
+
+        shapes.forEach((s) => {
+          s.rotation.x += s.userData.rotX;
+          s.rotation.y += s.userData.rotY;
+          s.position.y += Math.sin(frame * s.userData.floatSpeed + s.userData.floatOffset) * 0.003;
+        });
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      function onResize() {
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+      window.addEventListener("resize", onResize);
+
+      return () => {
+        cancelAnimationFrame(animId);
+        window.removeEventListener("resize", onResize);
+        renderer.dispose();
+      };
+    }
+
+    /* ─────────────── COMPONENTS ─────────────── */
+
+    function PriceTag({ price, originalPrice, flash, trending }) {
       const color = flash === "up" ? "#4ade80" : flash === "down" ? "#f87171" : "#e2b96f";
       const cls = flash === "up" ? "price-flash-up" : flash === "down" ? "price-flash-down" : "";
-      return (
-        <div className="flex items-center gap-2">
-          <span className={`text-lg font-bold font-mono transition-colors duration-300 ${cls}`} style={{ color }}>
-            ₹{Number(price).toFixed(2)}
-          </span>
-          {trending && (
-            <span className="trending-badge text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400 border border-green-400/30 tracking-wider">
-              🔥 TREND
-            </span>
-          )}
-        </div>
-      );
-    }
+      const discount = originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
 
-    function ProductCard({ product, index, isClicked, flashState }) {
-      const flashClass = flashState === "up" ? "flash-up" : flashState === "down" ? "flash-down" : "";
       return (
-        <div
-          className={`product-card rounded-2xl overflow-hidden cursor-pointer relative ${flashClass}`}
-          style={{
-            background: isClicked ? "rgba(226,185,111,0.08)" : "rgba(255,255,255,0.03)",
-            border: isClicked ? "1px solid rgba(226,185,111,0.5)" : "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          {isClicked && (
-            <div className="absolute top-2 right-2 z-10 text-[9px] font-bold px-2 py-0.5 rounded-full tracking-widest" style={{ background: "rgba(226,185,111,0.9)", color: "#0a0a12" }}>
-              SELECTED
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-lg font-bold font-mono ${cls}`} style={{ color }}>
+              {formatPrice(price)}
+            </span>
+            {trending && (
+              <span className="trending-badge text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-400/15 text-green-400 border border-green-400/30 tracking-wider">
+                🔥 HOT
+              </span>
+            )}
+          </div>
+          {originalPrice && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] line-through" style={{ color: "rgba(255,255,255,0.25)" }}>
+                {formatPrice(originalPrice)}
+              </span>
+              {discount > 0 && (
+                <span className="text-[10px] font-bold text-green-400">
+                  {discount}% OFF
+                </span>
+              )}
             </div>
           )}
-          {/* Gradient image area with centered emoji */}
-          <div className="relative flex items-center justify-center" style={{ background: GRADIENTS[index % GRADIENTS.length], aspectRatio: "1", minHeight: 140 }}>
-            <span className="text-5xl select-none drop-shadow-lg">{product.emoji}</span>
-            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(10,10,18,0.5) 0%, transparent 40%)" }} />
-            <span className="absolute bottom-1.5 left-2.5 text-[9px] font-semibold text-white/50 tracking-[0.12em] uppercase">
-              {product.category}
-            </span>
-          </div>
-          <div className="px-3 py-2.5">
-            <p className="text-[13px] font-medium text-white/90 leading-tight mb-1.5 m-0">{product.name}</p>
-            <PriceTag price={product.price} flash={flashState} trending={flashState === "up"} />
-          </div>
         </div>
       );
     }
 
-    function RecommendationCard({ product, index, isNew }) {
+    function ProductCard({ product, isSelected, flashState, onSelect, onCart }) {
+      const [wishlisted, setWishlisted] = useState(false);
+      const flashClass = flashState === "up" ? "flash-up" : flashState === "down" ? "flash-down" : "";
+
       return (
         <div
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 ${isNew ? "rec-new" : ""}`}
+          className={`product-card ${flashClass}`}
+          style={isSelected ? { borderColor: "rgba(226,185,111,0.5)", background: "rgba(226,185,111,0.04)" } : {}}
+          onClick={() => onSelect(product.id)}
+        >
+          {/* Image */}
+          <div className="product-img-wrapper">
+            <img src={product.img} alt={product.name} loading="lazy" />
+            <div className="product-img-overlay" />
+
+            {/* Badges */}
+            {isSelected && (
+              <span className="product-badge product-badge-selected">SELECTED</span>
+            )}
+            {!isSelected && product.badge === "HOT" && (
+              <span className="product-badge product-badge-hot">🔥 HOT</span>
+            )}
+            {!isSelected && product.badge === "NEW" && (
+              <span className="product-badge product-badge-new">✨ NEW</span>
+            )}
+
+            {/* Wishlist */}
+            <button
+              className="product-wishlist"
+              onClick={(e) => { e.stopPropagation(); setWishlisted(!wishlisted); }}
+              title="Wishlist"
+            >
+              {wishlisted ? "❤️" : "🤍"}
+            </button>
+
+            {/* Category */}
+            <span className="product-category-tag">{product.category}</span>
+          </div>
+
+          {/* Info */}
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-[13px] font-semibold text-white/90 m-0 leading-tight">{product.name}</p>
+            <p className="text-[10px] text-white/35 mt-0.5 m-0">{product.subtitle}</p>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Stars count={Math.round(product.rating)} />
+              <span className="text-[10px] text-white/30">({product.reviews.toLocaleString()})</span>
+            </div>
+            <div className="mt-2">
+              <PriceTag price={product.price} originalPrice={product.originalPrice} flash={flashState} trending={flashState === "up"} />
+            </div>
+          </div>
+
+          {/* Add to Cart */}
+          <button
+            className="add-to-cart-btn mt-3"
+            onClick={(e) => { e.stopPropagation(); onCart(product); }}
+          >
+            🛒 Add to Cart
+          </button>
+        </div>
+      );
+    }
+
+    function RecommendationCard({ product, isNew }) {
+      return (
+        <div
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 cursor-pointer ${isNew ? "rec-new" : ""}`}
           style={{
             background: isNew ? "rgba(226,185,111,0.06)" : "rgba(255,255,255,0.02)",
-            border: isNew ? "1px solid rgba(226,185,111,0.3)" : "1px solid rgba(255,255,255,0.06)",
+            border: isNew ? "1px solid rgba(226,185,111,0.3)" : "1px solid rgba(255,255,255,0.05)",
           }}
         >
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: REC_GRADIENTS[index % REC_GRADIENTS.length] }}>
-            {product.emoji}
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+            <img src={product.img} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-medium text-white/85 truncate m-0">{product.name}</p>
-            {isNew && <p className="text-[10px] text-gold mt-0.5 m-0">Just added</p>}
+            <p className="text-[11px] font-mono m-0 mt-0.5" style={{ color: "#e2b96f" }}>
+              {formatPrice(product.price)}
+            </p>
+            {isNew && <p className="text-[9px] text-green-400 m-0">Just recommended</p>}
           </div>
-          <span className="text-xs text-white/15">›</span>
+          <span className="text-white/15">›</span>
         </div>
       );
     }
 
-    function StatBox({ label, value }) {
+    function StatBox({ label, value, icon }) {
       return (
-        <div className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          <p className="text-[9px] tracking-[0.1em] text-white/30 font-medium m-0">{label}</p>
-          <p className="text-base font-semibold font-mono text-gold m-0">{value}</p>
+        <div className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          {icon && <span className="text-base mb-0.5">{icon}</span>}
+          <p className="text-[9px] tracking-[0.1em] font-semibold m-0" style={{ color: "rgba(255,255,255,0.3)" }}>{label}</p>
+          <p className="text-base font-bold font-mono m-0" style={{ color: "#e2b96f" }}>{value}</p>
         </div>
       );
     }
 
-    /* ── Main App ── */
+    function Toast({ message, onClose }) {
+      useEffect(() => {
+        const t = setTimeout(onClose, 3000);
+        return () => clearTimeout(t);
+      }, []);
+      return (
+        <div className="toast">
+          <span className="toast-icon">✅</span>
+          {message}
+          <button onClick={onClose} style={{ marginLeft: 8, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>✕</button>
+        </div>
+      );
+    }
+
+    /* ─────────────── HERO ─────────────── */
+
+    function HeroSection({ onScrollToProducts }) {
+      const canvasRef = useRef(null);
+
+      useEffect(() => {
+        if (!canvasRef.current) return;
+        const cleanup = initThree(canvasRef.current);
+        return cleanup;
+      }, []);
+
+      return (
+        <section className="hero-section" id="home">
+          <canvas id="three-canvas" ref={canvasRef} />
+
+          <div className="relative z-10 max-w-screen-xl mx-auto px-6 w-full">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              {/* Left copy */}
+              <div>
+                <div className="hero-badge mb-6" data-aos="fade-down" data-aos-duration="600">
+                  <span className="dot" />
+                  Live Dynamic Pricing Engine
+                </div>
+
+                <h1 className="hero-title mb-6" data-aos="fade-up" data-aos-duration="800" data-aos-delay="100">
+                  Shop<br />Smarter.<br />
+                  <span style={{ WebkitTextFillColor: "transparent", background: "linear-gradient(135deg, #e2b96f, #f0d49a)", WebkitBackgroundClip: "text", backgroundClip: "text" }}>
+                    Save More.
+                  </span>
+                </h1>
+
+                <p className="text-[17px] leading-relaxed mb-8 max-w-md" style={{ color: "rgba(255,255,255,0.5)" }} data-aos="fade-up" data-aos-duration="800" data-aos-delay="200">
+                  AI-powered pricing that adapts in real-time. Get the best price on premium tech, every time you visit.
+                </p>
+
+                <div className="flex flex-wrap gap-4" data-aos="fade-up" data-aos-duration="800" data-aos-delay="300">
+                  <button className="hero-cta-btn hero-cta-primary" onClick={onScrollToProducts}>
+                    Shop Now
+                    <span>→</span>
+                  </button>
+                  <button className="hero-cta-btn hero-cta-secondary">
+                    Watch Demo
+                    <span>▶</span>
+                  </button>
+                </div>
+
+                {/* Micro stats */}
+                <div className="flex flex-wrap gap-6 mt-10" data-aos="fade-up" data-aos-duration="800" data-aos-delay="400">
+                  {[["50K+", "Happy Customers"], ["₹2Cr+", "Savings This Month"], ["8 Mins", "Avg Delivery ETA"]].map(([v, l]) => (
+                    <div key={l}>
+                      <p className="text-xl font-bold font-mono m-0" style={{ color: "#e2b96f" }}>{v}</p>
+                      <p className="text-[11px] m-0 mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{l}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right — floating product cards */}
+              <div className="hidden lg:flex flex-col gap-4 relative" data-aos="fade-left" data-aos-duration="900" data-aos-delay="200">
+                <div className="hero-stat-card" style={{ marginLeft: "20%" }}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <img src={PRODUCTS[0].img} alt="" className="w-12 h-12 rounded-xl object-cover" />
+                    <div>
+                      <p className="text-[13px] font-semibold m-0 text-white/90">{PRODUCTS[0].name}</p>
+                      <p className="text-[11px] m-0 font-mono" style={{ color: "#4ade80" }}>Price just dropped! ↓ 14%</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold font-mono" style={{ color: "#e2b96f" }}>{formatPrice(PRODUCTS[0].price)}</span>
+                    <span className="text-[11px] line-through" style={{ color: "rgba(255,255,255,0.25)" }}>{formatPrice(PRODUCTS[0].originalPrice)}</span>
+                  </div>
+                </div>
+
+                <div className="hero-stat-card" style={{ marginRight: "20%" }}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <img src={PRODUCTS[2].img} alt="" className="w-12 h-12 rounded-xl object-cover" />
+                    <div>
+                      <p className="text-[13px] font-semibold m-0 text-white/90">{PRODUCTS[2].name}</p>
+                      <p className="text-[11px] m-0" style={{ color: "rgba(255,255,255,0.45)" }}>⭐ {PRODUCTS[2].rating} · {PRODUCTS[2].reviews.toLocaleString()} reviews</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold font-mono" style={{ color: "#e2b96f" }}>{formatPrice(PRODUCTS[2].price)}</span>
+                    <button className="add-to-cart-btn" style={{ width: "auto", padding: "6px 14px", borderRadius: 8, fontSize: 11 }}>Add →</button>
+                  </div>
+                </div>
+
+                <div className="hero-stat-card" style={{ marginLeft: "10%", marginRight: "10%" }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: "#4ade80", fontSize: 18 }}>📈</span>
+                    <div>
+                      <p className="text-[12px] font-semibold m-0 text-white/85">AI Price Alert</p>
+                      <p className="text-[11px] m-0" style={{ color: "rgba(255,255,255,0.4)" }}>Keyboard price optimal — buy now!</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scroll indicator */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10 cursor-pointer" onClick={onScrollToProducts}>
+            <span className="text-[10px] tracking-[0.2em] text-white/25 uppercase">Scroll</span>
+            <div style={{ width: 1, height: 48, background: "linear-gradient(to bottom, rgba(226,185,111,0.4), transparent)" }} />
+          </div>
+        </section>
+      );
+    }
+
+    /* ─────────────── MAIN APP ─────────────── */
 
     function App() {
-      const [products, setProducts] = useState(MOCK_PRODUCTS);
-      const [recommendations, setRecommendations] = useState(MOCK_RECOMMENDATIONS.slice(0, 4));
+      const [products, setProducts] = useState(PRODUCTS);
+      const [recommendations, setRecommendations] = useState(RECOMMENDATIONS.slice(0, 4));
       const [loading, setLoading] = useState(false);
-      const [clickedId, setClickedId] = useState(null);
+      const [selectedId, setSelectedId] = useState(null);
       const [flashStates, setFlashStates] = useState({});
       const [newRecIds, setNewRecIds] = useState(new Set());
       const [lastAction, setLastAction] = useState(null);
       const [simCount, setSimCount] = useState(0);
       const [showLogin, setShowLogin] = useState(false);
+      const [activeCategory, setActiveCategory] = useState("All");
+      const [cartCount, setCartCount] = useState(0);
+      const [toast, setToast] = useState(null);
+      const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+      const productsRef = useRef(null);
+
+      // Init AOS
+      useEffect(() => {
+        AOS.init({ duration: 700, once: true, easing: "ease-out-cubic", offset: 60 });
+        // GSAP scroll-triggered animations for stat numbers
+        gsap.registerPlugin(ScrollTrigger);
+      }, []);
+
+      const scrollToProducts = () => {
+        productsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
 
       const simulateClick = useCallback(async () => {
         if (loading) return;
@@ -347,7 +1313,7 @@
         setSimCount((c) => c + 1);
 
         const randomProduct = products[Math.floor(Math.random() * products.length)];
-        setClickedId(randomProduct.id);
+        setSelectedId(randomProduct.id);
 
         try {
           let newPrice = randomProduct.price;
@@ -361,17 +1327,17 @@
               priceChanged = true;
             }
           } catch {
-            const delta = Math.random() * 0.25 - 0.05;
-            newPrice = +(randomProduct.price * (1 + delta)).toFixed(2);
+            const delta = Math.random() * 0.2 - 0.05;
+            newPrice = Math.round(randomProduct.price * (1 + delta));
             priceChanged = true;
           }
 
           const priceUp = newPrice > randomProduct.price;
-          setLastAction(`${randomProduct.name}: ₹${randomProduct.price.toFixed(2)} → ₹${newPrice.toFixed(2)} ${priceUp ? "▲" : "▼"}`);
+          setLastAction(`${randomProduct.name}: ${formatPrice(randomProduct.price)} → ${formatPrice(newPrice)} ${priceUp ? "▲" : "▼"}`);
 
           if (priceChanged) {
             setFlashStates((prev) => ({ ...prev, [randomProduct.id]: priceUp ? "up" : "down" }));
-            setProducts((prev) => prev.map((p) => (p.id === randomProduct.id ? { ...p, price: newPrice } : p)));
+            setProducts((prev) => prev.map((p) => p.id === randomProduct.id ? { ...p, price: newPrice } : p));
             setTimeout(() => setFlashStates((prev) => ({ ...prev, [randomProduct.id]: null })), 2500);
           }
 
@@ -383,7 +1349,7 @@
               newRecs = recData.recommendations ?? newRecs;
             }
           } catch {
-            newRecs = [...MOCK_RECOMMENDATIONS].sort(() => Math.random() - 0.5).slice(0, 4);
+            newRecs = [...RECOMMENDATIONS].sort(() => Math.random() - 0.5).slice(0, 4);
           }
 
           const freshIds = new Set(newRecs.map((r) => r.id).filter((id) => !recommendations.find((r) => r.id === id)));
@@ -395,213 +1361,339 @@
         }
       }, [products, recommendations, loading]);
 
-      const avgPrice = (products.reduce((s, p) => s + p.price, 0) / products.length).toFixed(0);
+      const handleCart = (product) => {
+        setCartCount((c) => c + 1);
+        setToast(`${product.name} added to cart!`);
+      };
+
+      const filteredProducts = activeCategory === "All"
+        ? products
+        : products.filter((p) => p.category === activeCategory);
+
+      const avgPrice = Math.round(products.reduce((s, p) => s + p.price, 0) / products.length);
 
       return (
-        <div className="min-h-screen font-outfit text-white" style={{ background: "#0a0a12" }}>
+        <div className="min-h-screen font-outfit" style={{ background: "#080810", color: "#fff" }}>
 
-          {/* ── Sticky Header ── */}
-          <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(10,10,18,0.88)", backdropFilter: "blur(14px)" }}>
+          {/* ── NAVIGATION ── */}
+          <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-3.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(8,8,16,0.88)", backdropFilter: "blur(20px)" }}>
+
+            {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-md flex items-center justify-center text-sm" style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)" }}>◈</div>
-              <span className="font-playfair text-lg text-gold">Smart Shop</span>
-              <span className="text-[10px] text-white/25 tracking-[0.15em] hidden sm:inline">FASTER PRICING, FAIRER DECISIONS, MEASURABLE RESULTS</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)", color: "#080810" }}>◈</div>
+              <span className="font-playfair text-lg" style={{ color: "#f8e2a4" }}>Smart Shop</span>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Last action ticker */}
+            {/* Nav links — desktop */}
+            <div className="hidden md:flex items-center gap-8">
+              {["Home", "Products", "Deals", "About"].map((l) => (
+                <a key={l} href={l === "Home" ? "#home" : l === "Products" ? "#products" : "#"} className="nav-link">{l}</a>
+              ))}
+            </div>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-3">
               {lastAction && (
-                <span className="text-[11px] text-white/35 font-mono hidden md:inline truncate max-w-xs">
+                <span className="text-[10px] font-mono hidden lg:inline" style={{ color: "rgba(255,255,255,0.3)", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {lastAction}
                 </span>
               )}
 
               {/* Sim counter */}
-              <div className="text-right">
-                <p className="text-[9px] text-white/25 tracking-[0.1em] m-0 leading-none">RUNS</p>
-                <p className="text-lg font-mono text-gold font-medium m-0 leading-tight">{String(simCount).padStart(3, "0")}</p>
+              <div className="text-right hidden sm:block">
+                <p className="text-[9px] tracking-[0.1em] m-0 leading-none" style={{ color: "rgba(255,255,255,0.25)" }}>RUNS</p>
+                <p className="text-base font-mono font-bold m-0 leading-tight" style={{ color: "#e2b96f" }}>{String(simCount).padStart(3, "0")}</p>
               </div>
 
-              {/* Login Button */}
+              {/* Cart */}
+              <div className="relative cursor-pointer" onClick={() => setToast("Cart feature coming soon!")}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>🛒</div>
+                {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+              </div>
+
+              {/* Login */}
               <button
-                className="sim-btn rounded-xl px-4 py-2.5 text-[13px] font-semibold tracking-wide border-none"
+                className="sim-btn hidden sm:flex rounded-xl px-4 py-2 text-[12px] font-semibold items-center gap-1.5 border-none"
                 onClick={() => setShowLogin(true)}
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#e2b96f",
-                  border: "1px solid rgba(226,185,111,0.3)",
-                  fontFamily: "Outfit, sans-serif",
-                }}
+                style={{ background: "rgba(255,255,255,0.05)", color: "#e2b96f", border: "1px solid rgba(226,185,111,0.25)", fontFamily: "Outfit,sans-serif", cursor: "pointer" }}
               >
                 🔐 Login
               </button>
 
-              {/* Simulate Button — right in the header */}
+              {/* Simulate */}
               <button
                 id="simulate-btn"
-                className="sim-btn rounded-xl px-5 py-2.5 text-[13px] font-semibold tracking-wide border-none flex items-center gap-2"
+                className="sim-btn rounded-xl px-4 py-2.5 text-[12px] font-semibold border-none flex items-center gap-2"
                 onClick={simulateClick}
                 disabled={loading}
                 style={{
                   background: loading ? "rgba(226,185,111,0.1)" : "linear-gradient(135deg, #e2b96f 0%, #c8973e 100%)",
-                  color: loading ? "rgba(226,185,111,0.5)" : "#0a0a12",
+                  color: loading ? "rgba(226,185,111,0.5)" : "#080810",
                   cursor: loading ? "not-allowed" : "pointer",
                   fontFamily: "Outfit, sans-serif",
                 }}
               >
                 {loading && <div className="spinner" />}
-                {loading ? "Processing…" : "⚡ Simulate Click"}
+                {loading ? "Processing…" : "⚡ Simulate"}
               </button>
             </div>
-          </header>
+          </nav>
 
-          {/* ── Main Content ── */}
-          <div className="max-w-screen-xl mx-auto px-6 pt-5 pb-12">
-            <div className="grid gap-6 items-start" style={{ gridTemplateColumns: "1fr 280px" }}>
+          {/* ── HERO ── */}
+          <HeroSection onScrollToProducts={scrollToProducts} />
 
-              {/* ── Product Grid ── */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h1 className="text-[13px] tracking-[0.15em] text-white/30 font-medium m-0">CATALOG</h1>
-                    <p className="text-xl font-semibold text-white mt-0.5 m-0">{products.length} Products</p>
+          {/* ── MARQUEE TICKER ── */}
+          <div className="marquee-wrapper">
+            <div className="marquee-track">
+              {[...Array(2)].map((_, rep) =>
+                ["🎧 Free Shipping Over ₹999", "⚡ Dynamic Pricing Active", "🤖 AI Recommendations Live", "🔥 Today's Deals — Up to 40% Off", "🚀 Same-Day Delivery Available", "💎 Premium Tech, Curated for You"].map((item, i) => (
+                  <div key={`${rep}-${i}`} className="marquee-item">
+                    <span>·</span> {item}
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: "#4ade80", boxShadow: "0 0 4px rgba(74,222,128,0.6)" }} />
-                    <span className="text-[10px] text-white/25 font-mono">connected</span>
-                  </div>
-                </div>
-
-                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))" }}>
-                  {products.map((product, i) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      index={i}
-                      isClicked={product.id === clickedId}
-                      flashState={flashStates[product.id] ?? null}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              {/* ── Sidebar ── */}
-              <aside className="sticky top-16">
-                <div className="mb-3">
-                  <h2 className="text-[13px] tracking-[0.15em] text-white/30 font-medium m-0">AI PICKS</h2>
-                  <p className="text-xl font-semibold text-white mt-0.5 m-0">Recommended</p>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  {recommendations.map((rec, i) => (
-                    <RecommendationCard key={rec.id} product={rec} index={i} isNew={newRecIds.has(rec.id)} />
-                  ))}
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 mt-5">
-                  <StatBox label="AVG PRICE" value={`₹${avgPrice}`} />
-                  <StatBox label="UPDATES" value={simCount} />
-                  <StatBox label="PRODUCTS" value={products.length} />
-                  <StatBox label="TRENDING" value={Object.values(flashStates).filter((v) => v === "up").length} />
-                </div>
-
-                {/* API Status */}
-                <div className="mt-3 px-3 py-2.5 rounded-lg flex items-center gap-2" style={{ background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)" }}>
-                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#4ade80", boxShadow: "0 0 5px rgba(74,222,128,0.6)" }} />
-                  <div>
-                    <p className="text-[11px] text-green-400/80 font-medium m-0">Live simulation active</p>
-                    <p className="text-[10px] text-white/20 m-0">Mock fallback on API failure</p>
-                  </div>
-                </div>
-              </aside>
-
+                ))
+              )}
             </div>
           </div>
 
-          {/* Login Modal */}
-          {showLogin && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(10,10,18,0.8)", backdropFilter: "blur(8px)" }}>
-              <div className="bg-surface-card rounded-2xl p-8 max-w-md w-full mx-4 relative" style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
-                {/* Close button */}
-                <button
-                  onClick={() => setShowLogin(false)}
-                  className="absolute top-4 right-4 text-white/40 hover:text-white/70 transition-colors"
-                >
-                  ✕
-                </button>
+          {/* ── FEATURES ── */}
+          <section className="py-20 px-6 max-w-screen-xl mx-auto" id="features">
+            <div className="text-center mb-14" data-aos="fade-up">
+              <span className="section-label">Why Smart Shop?</span>
+              <h2 className="section-title">Built for the Modern Shopper</h2>
+              <p className="mt-3 max-w-lg mx-auto" style={{ color: "rgba(255,255,255,0.4)", fontSize: 15, lineHeight: 1.7 }}>
+                We combine AI, real-time data, and a curated catalog to give you an unmatched shopping experience.
+              </p>
+            </div>
 
-                {/* Header */}
-                <div className="text-center mb-6">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)" }}>
-                    🔐
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {FEATURES.map((f, i) => (
+                <div key={f.title} className="feature-card" data-aos="fade-up" data-aos-delay={i * 80}>
+                  <div className="feature-icon" style={{ background: f.gradient }}>
+                    {f.icon}
                   </div>
-                  <h2 className="text-xl font-playfair text-gold mb-1">Welcome Back</h2>
-                  <p className="text-sm text-white/60">Sign in to your Smart Shop account</p>
+                  <h3 className="text-[15px] font-semibold text-white/90 mb-2">{f.title}</h3>
+                  <p className="text-[13px] leading-relaxed m-0" style={{ color: "rgba(255,255,255,0.4)" }}>{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <hr className="gradient-divider" />
+
+          {/* ── PRODUCTS ── */}
+          <section className="py-20 px-6 max-w-screen-xl mx-auto" ref={productsRef} id="products">
+            <div className="flex flex-col lg:flex-row gap-8 items-start">
+
+              {/* Main column */}
+              <div className="flex-1 min-w-0">
+                {/* Header */}
+                <div className="flex items-end justify-between mb-6 flex-wrap gap-4" data-aos="fade-up">
+                  <div>
+                    <span className="section-label">Live Catalog</span>
+                    <h2 className="section-title m-0">
+                      {filteredProducts.length} {activeCategory !== "All" ? activeCategory : ""} Products
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ background: "#4ade80", boxShadow: "0 0 6px rgba(74,222,128,0.8)" }} />
+                    <span className="text-[11px] font-mono" style={{ color: "rgba(255,255,255,0.3)" }}>Dynamic pricing active</span>
+                  </div>
                 </div>
 
-                {/* Login Form */}
-                <form className="space-y-4">
-                  {/* Email/Mobile Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Email or Mobile Number</label>
-                    <input
-                      type="text"
-                      placeholder="Enter email or mobile number"
-                      className="w-full px-4 py-3 rounded-xl bg-surface border text-white placeholder-white/40 focus:outline-none focus:ring-2 transition-all"
-                      style={{
-                        borderColor: "rgba(255,255,255,0.07)",
-                        background: "rgba(255,255,255,0.03)",
-                        fontFamily: "Outfit, sans-serif"
-                      }}
-                    />
-                  </div>
+                {/* Category pills */}
+                <div className="flex gap-2 mb-8 overflow-x-auto pb-2" data-aos="fade-up" data-aos-delay="80">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      className={`category-pill ${activeCategory === cat ? "active" : ""}`}
+                      onClick={() => setActiveCategory(cat)}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
 
-                  {/* Password Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-white/80 mb-2">Password</label>
-                    <input
-                      type="password"
-                      placeholder="Enter your password"
-                      className="w-full px-4 py-3 rounded-xl bg-surface border text-white placeholder-white/40 focus:outline-none focus:ring-2 transition-all"
-                      style={{
-                        borderColor: "rgba(255,255,255,0.07)",
-                        background: "rgba(255,255,255,0.03)",
-                        fontFamily: "Outfit, sans-serif"
-                      }}
-                    />
-                  </div>
+                {/* Grid */}
+                <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))" }}>
+                  {filteredProducts.map((product, i) => (
+                    <div key={product.id} data-aos="fade-up" data-aos-delay={i * 50}>
+                      <ProductCard
+                        product={product}
+                        isSelected={product.id === selectedId}
+                        flashState={flashStates[product.id] ?? null}
+                        onSelect={setSelectedId}
+                        onCart={handleCart}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                  {/* Remember me & Forgot password */}
-                  <div className="flex items-center justify-between text-sm">
-                    <label className="flex items-center gap-2 text-white/60">
-                      <input type="checkbox" className="rounded" />
-                      Remember me
+              {/* Sidebar */}
+              <aside className="w-full lg:w-72 flex-shrink-0 sticky top-20" data-aos="fade-left" data-aos-delay="100">
+
+                {/* AI Picks */}
+                <div className="mb-4">
+                  <span className="section-label" style={{ fontSize: 10 }}>AI-Powered</span>
+                  <h3 className="text-[18px] font-semibold text-white m-0">Recommended for You</h3>
+                </div>
+
+                <div className="flex flex-col gap-2 mb-5">
+                  {recommendations.map((rec, i) => (
+                    <RecommendationCard key={rec.id} product={rec} isNew={newRecIds.has(rec.id)} />
+                  ))}
+                </div>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <StatBox label="AVG PRICE" value={formatPrice(avgPrice)} icon="📊" />
+                  <StatBox label="UPDATES" value={simCount} icon="⚡" />
+                  <StatBox label="PRODUCTS" value={products.length} icon="📦" />
+                  <StatBox label="TRENDING" value={Object.values(flashStates).filter(v => v === "up").length} icon="🔥" />
+                </div>
+
+                {/* Live status */}
+                <div className="rounded-xl px-3 py-3 flex items-center gap-2.5"
+                  style={{ background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)" }}>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: "#4ade80", boxShadow: "0 0 6px rgba(74,222,128,0.8)" }} />
+                  <div>
+                    <p className="text-[11px] text-green-400/80 font-semibold m-0">Live simulation active</p>
+                    <p className="text-[10px] m-0" style={{ color: "rgba(255,255,255,0.2)" }}>API fallback: mock mode</p>
+                  </div>
+                </div>
+
+                {/* Deal of Day */}
+                <div className="mt-4 rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(226,185,111,0.2)" }}>
+                  <img src={PRODUCTS[3].img} alt="Deal" className="w-full h-32 object-cover" />
+                  <div className="p-4" style={{ background: "rgba(226,185,111,0.05)" }}>
+                    <p className="text-[10px] font-bold tracking-[0.15em] text-gold m-0 mb-1">⏱ DEAL OF THE DAY</p>
+                    <p className="text-[13px] font-semibold text-white/90 m-0">{PRODUCTS[3].name}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-base font-bold font-mono" style={{ color: "#e2b96f" }}>{formatPrice(PRODUCTS[3].price)}</span>
+                      <span className="text-[10px] font-bold text-green-400 bg-green-400/10 px-2 py-0.5 rounded">
+                        SAVE {Math.round(((PRODUCTS[3].originalPrice - PRODUCTS[3].price) / PRODUCTS[3].originalPrice) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <hr className="gradient-divider" />
+
+          {/* ── TESTIMONIALS ── */}
+          <section className="py-20 px-6 max-w-screen-xl mx-auto" id="testimonials">
+            <div className="text-center mb-14" data-aos="fade-up">
+              <span className="section-label">Social Proof</span>
+              <h2 className="section-title">What Our Customers Say</h2>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-6">
+              {TESTIMONIALS.map((t, i) => (
+                <div key={t.name} className="testimonial-card" data-aos="fade-up" data-aos-delay={i * 100}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <img src={t.avatar} alt={t.name} className="w-11 h-11 rounded-full object-cover" />
+                    <div>
+                      <p className="text-[13px] font-semibold text-white/90 m-0">{t.name}</p>
+                      <p className="text-[11px] m-0" style={{ color: "rgba(255,255,255,0.35)" }}>{t.role}</p>
+                    </div>
+                    <div className="ml-auto">
+                      <Stars count={t.stars} />
+                    </div>
+                  </div>
+                  <p className="text-[13px] leading-relaxed m-0" style={{ color: "rgba(255,255,255,0.55)" }}>"{t.text}"</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <hr className="gradient-divider" />
+
+          {/* ── FOOTER ── */}
+          <footer className="py-12 px-6 max-w-screen-xl mx-auto">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                  style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)", color: "#080810" }}>◈</div>
+                <span className="font-playfair text-lg" style={{ color: "#f8e2a4" }}>Smart Shop</span>
+              </div>
+
+              <div className="flex flex-wrap gap-6 justify-center">
+                {["Privacy Policy", "Terms of Service", "Shipping", "Returns", "Contact Us"].map((l) => (
+                  <a key={l} href="#" className="footer-link">{l}</a>
+                ))}
+              </div>
+
+              <p className="text-[12px] m-0" style={{ color: "rgba(255,255,255,0.2)" }}>
+                © 2026 Smart Shop. All rights reserved.
+              </p>
+            </div>
+          </footer>
+
+          {/* ── LOGIN MODAL ── */}
+          {showLogin && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center"
+              style={{ background: "rgba(8,8,16,0.85)", backdropFilter: "blur(12px)" }}>
+              <div className="rounded-2xl p-8 max-w-md w-full mx-4 relative"
+                style={{ background: "rgba(15,15,25,0.97)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 32px 80px rgba(0,0,0,0.7)" }}>
+                <button onClick={() => setShowLogin(false)}
+                  className="absolute top-4 right-4"
+                  style={{ color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 18 }}>✕</button>
+
+                <div className="text-center mb-7">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"
+                    style={{ background: "linear-gradient(135deg, #e2b96f, #c8973e)" }}>🔐</div>
+                  <h2 className="text-xl font-playfair m-0 mb-1" style={{ color: "#e2b96f" }}>Welcome Back</h2>
+                  <p className="text-[13px] m-0" style={{ color: "rgba(255,255,255,0.4)" }}>Sign in to your Smart Shop account</p>
+                </div>
+
+                <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setShowLogin(false); setToast("Logged in successfully! 🎉"); }}>
+                  {["Email or Mobile Number", "Password"].map((label, i) => (
+                    <div key={label}>
+                      <label className="block text-[12px] font-medium mb-1.5" style={{ color: "rgba(255,255,255,0.6)" }}>{label}</label>
+                      <input
+                        type={i === 1 ? "password" : "text"}
+                        placeholder={i === 0 ? "you@example.com" : "••••••••"}
+                        className="w-full px-4 py-3 rounded-xl text-white text-[13px] outline-none transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          fontFamily: "Outfit, sans-serif",
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = "rgba(226,185,111,0.4)"}
+                        onBlur={(e) => e.target.style.borderColor = "rgba(255,255,255,0.08)"}
+                      />
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between text-[12px]">
+                    <label className="flex items-center gap-2" style={{ color: "rgba(255,255,255,0.5)", cursor: "pointer" }}>
+                      <input type="checkbox" className="rounded" /> Remember me
                     </label>
-                    <a href="#" className="text-gold hover:text-gold-light transition-colors">Forgot password?</a>
+                    <a href="#" style={{ color: "#e2b96f", textDecoration: "none" }}>Forgot password?</a>
                   </div>
 
-                  {/* Login Button */}
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-xl font-semibold text-sm tracking-wide transition-all"
-                    style={{
-                      background: "linear-gradient(135deg, #e2b96f 0%, #c8973e 100%)",
-                      color: "#0a0a12",
-                      fontFamily: "Outfit, sans-serif"
-                    }}
-                  >
+                  <button type="submit" className="w-full py-3 rounded-xl font-semibold text-[13px] tracking-wide border-none cursor-pointer transition-all"
+                    style={{ background: "linear-gradient(135deg, #e2b96f 0%, #c8973e 100%)", color: "#080810", fontFamily: "Outfit, sans-serif" }}>
                     Sign In
                   </button>
 
-                  {/* Sign up link */}
-                  <div className="text-center text-sm text-white/60">
-                    Don't have an account? <a href="#" className="text-gold hover:text-gold-light transition-colors">Sign up</a>
-                  </div>
+                  <p className="text-center text-[12px] m-0" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    No account? <a href="#" style={{ color: "#e2b96f", textDecoration: "none" }}>Sign up free →</a>
+                  </p>
                 </form>
               </div>
             </div>
           )}
+
+          {/* ── TOAST ── */}
+          {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
         </div>
       );
     }
