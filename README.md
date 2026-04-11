@@ -1,5 +1,4 @@
-# APEX — Dynamic Pricing Engine
-
+Smart shop:
 Real-time dynamic pricing, personalized recommendations, and A/B testing engine for e-commerce.
 
 ## Features
@@ -24,3 +23,5 @@ python server.py
 | Frontend | React (CDN) + TailwindCSS |
 | Data Store | In-memory Python dict |
 | Data | Parquet files (5K+ products) |
+
+
